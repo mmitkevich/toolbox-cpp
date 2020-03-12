@@ -39,8 +39,8 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -march=${T
 set(CMAKE_C_FLAGS_MINSIZEREL       "${CMAKE_C_FLAGS_MINSIZEREL} -march=${TOOLBOX_BUILD_ARCH}")
 set(CMAKE_CXX_FLAGS_MINSIZEREL     "${CMAKE_CXX_FLAGS_MINSIZEREL} -march=${TOOLBOX_BUILD_ARCH}")
 
-set(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+#set(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
+#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
 
 # Intended for use with Linux Perf.
 set(CMAKE_C_FLAGS_PERF   "${CMAKE_C_FLAGS_RELEASE} -fno-omit-frame-pointer")
@@ -144,6 +144,9 @@ endif()
 
 find_package(Doxygen) # Optional.
 
+find_package(CURL) 
+include_directories(SYSTEM ${CURL_INCLUDE_DIR})
+
 if(TOOLBOX_BUILD_SHARED)
   set(toolbox_LIBRARY toolbox-shared)
   set(toolbox_bm_LIBRARY toolbox-bm-shared)
@@ -197,7 +200,7 @@ install(FILES
 add_subdirectory(toolbox)
 add_subdirectory(bench)
 add_subdirectory(example)
-add_subdirectory(image)
+#add_subdirectory(image)
 add_subdirectory(doc)
 
 set(CPACK_GENERATOR "TGZ;RPM;DEB")

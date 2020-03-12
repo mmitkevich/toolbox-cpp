@@ -127,6 +127,11 @@ set(lib_SOURCES
   util/Variant.cpp
   util/Version.cpp)
 
+if(CURL_FOUND)
+  set(lib_SOURCES, ${lib_SOURCES}
+  curlite/curlite.cpp)
+endif()
+
 add_library(toolbox-static STATIC ${lib_SOURCES})
 set_target_properties(toolbox-static PROPERTIES OUTPUT_NAME toolbox)
 target_link_libraries(toolbox-static pthread)
