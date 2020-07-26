@@ -80,7 +80,7 @@ TOOLBOX_BENCHMARK(sprintf)
         }
     }
 }
-
+#ifdef TOOLBOX_HAVE_STRFROMD
 TOOLBOX_BENCHMARK(strfromd)
 {
     char buf[64];
@@ -91,5 +91,5 @@ TOOLBOX_BENCHMARK(strfromd)
         }
     }
 }
-
+#endif
 } // namespace
