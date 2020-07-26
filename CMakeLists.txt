@@ -1,6 +1,6 @@
 # The Reactive C++ Toolbox.
 # Copyright (C) 2013-2019 Swirly Cloud Limited
-# Copyright (C) 2019 Reactive Markets Limited
+# Copyright (C) 2020 Reactive Markets Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,16 +20,24 @@ project(toolbox-cpp)
 include(GNUInstallDirs)
 
 # Configuration options:
-set(TOOLBOX_BUILD_ARCH "native" CACHE STRING "Target architecture.")
-set(TOOLBOX_BUILD_SHARED ON CACHE BOOL "Enable shared libs.")
-set(TOOLBOX_VERSION "snapshot" CACHE STRING "Release version.")
-set(TOOLBOX_TOOLCHAIN "" CACHE PATH "Toolchain prefix.")
+set(REACTIVE_BUILD_ARCH "native" CACHE STRING "Target architecture.")
+set(REACTIVE_BUILD_SHARED ON CACHE BOOL "Enable shared libs.")
+set(REACTIVE_VERSION "snapshot" CACHE STRING "Release version.")
+set(REACTIVE_TOOLCHAIN "" CACHE PATH "Toolchain prefix.")
+
+# Toolbox options.
+set(TOOLBOX_BUILD_ARCH   "${REACTIVE_BUILD_ARCH}")
+set(TOOLBOX_BUILD_SHARED "${REACTIVE_BUILD_SHARED}")
+set(TOOLBOX_VERSION      "${REACTIVE_VERSION}")
+set(TOOLBOX_TOOLCHAIN    "${REACTIVE_TOOLCHAIN}")
 
 if (NOT "${TOOLBOX_TOOLCHAIN}" STREQUAL "")
   get_filename_component(TOOLBOX_TOOLCHAIN "${TOOLBOX_TOOLCHAIN}" REALPATH)
   set(CMAKE_PREFIX_PATH "${TOOLBOX_TOOLCHAIN}")
   message(STATUS "TOOLBOX_TOOLCHAIN: ${TOOLBOX_TOOLCHAIN}")
 endif()
+
+set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${PROJECT_SOURCE_DIR}/etc/cmake")
 
 # Optimise for target architecture.
 set(CMAKE_C_FLAGS_RELEASE          "${CMAKE_C_FLAGS_RELEASE} -march=${TOOLBOX_BUILD_ARCH}")
@@ -142,17 +150,24 @@ if(NOT "${Boost_UNIT_TEST_FRAMEWORK_LIBRARY_RELEASE}" MATCHES "\\.a$")
   add_definitions(-DBOOST_TEST_DYN_LINK)
 endif()
 
+find_package(SystemTap)
+if(SYSTEMTAP_FOUND)
+  set(TOOLBOX_HAVE_SYSTEMTAP 1)
+else()
+  set(TOOLBOX_HAVE_SYSTEMTAP 0)
+endif()
+
 find_package(Doxygen) # Optional.
 
 find_package(CURL) 
 include_directories(SYSTEM ${CURL_INCLUDE_DIR})
 
 if(TOOLBOX_BUILD_SHARED)
-  set(toolbox_LIBRARY toolbox-shared)
-  set(toolbox_bm_LIBRARY toolbox-bm-shared)
+  set(tb_core_LIBRARY tb-core-shared)
+  set(tb_bm_LIBRARY tb-bm-shared)
 else()
-  set(toolbox_LIBRARY toolbox-static)
-  set(toolbox_bm_LIBRARY toolbox-bm-static)
+  set(tb_core_LIBRARY tb-core-static)
+  set(tb_bm_LIBRARY tb-bm-static)
 endif()
 
 enable_testing()
@@ -202,6 +217,7 @@ add_subdirectory(bench)
 add_subdirectory(example)
 #add_subdirectory(image)
 add_subdirectory(doc)
+add_subdirectory(etc)
 
 set(CPACK_GENERATOR "TGZ;RPM;DEB")
 

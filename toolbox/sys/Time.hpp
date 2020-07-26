@@ -1,6 +1,6 @@
 // The Reactive C++ Toolbox.
 // Copyright (C) 2013-2019 Swirly Cloud Limited
-// Copyright (C) 2019 Reactive Markets Limited
+// Copyright (C) 2020 Reactive Markets Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,6 +61,19 @@ struct MonoClock {
     }
 
     static time_point now() noexcept { return time_point{get_time(Id)}; }
+
+    static constexpr std::time_t to_time_t(const time_point& tp) noexcept
+    {
+        using namespace std::chrono;
+        return duration_cast<seconds>(tp.time_since_epoch()).count();
+    }
+
+    static constexpr time_point from_time_t(std::time_t t) noexcept
+    {
+        using namespace std::chrono;
+        using FromPoint = std::chrono::time_point<MonoClock, seconds>;
+        return time_point_cast<Duration>(FromPoint{seconds{t}});
+    }
 };
 
 struct WallClock {

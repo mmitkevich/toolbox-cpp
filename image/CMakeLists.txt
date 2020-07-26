@@ -1,6 +1,6 @@
 # The Reactive C++ Toolbox.
 # Copyright (C) 2013-2019 Swirly Cloud Limited
-# Copyright (C) 2019 Reactive Markets Limited
+# Copyright (C) 2020 Reactive Markets Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ if(DOT_EXECUTABLE)
 
   foreach(name ${names})
 
-    set(outfile "${CMAKE_BINARY_DIR}/image/toolbox-${name}.png")
+    set(outfile "${CMAKE_BINARY_DIR}/image/tb-${name}.png")
 
     add_custom_command(
       OUTPUT "${outfile}"
@@ -47,4 +47,4 @@ if(DOT_EXECUTABLE)
 
 endif()
 
-add_custom_target(toolbox-image ALL DEPENDS ${outfiles})
+add_custom_target(tb-image ALL DEPENDS ${outfiles})

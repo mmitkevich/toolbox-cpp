@@ -1,6 +1,6 @@
 // The Reactive C++ Toolbox.
 // Copyright (C) 2013-2019 Swirly Cloud Limited
-// Copyright (C) 2019 Reactive Markets Limited
+// Copyright (C) 2020 Reactive Markets Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,18 +18,17 @@
 #define TOOLBOX_IO_HPP
 
 #include "io/Buffer.hpp"
-#include "io/Disposable.hpp"
+#include "io/Disposer.hpp"
 #include "io/Epoll.hpp"
 #include "io/Event.hpp"
 #include "io/EventFd.hpp"
 #include "io/File.hpp"
 #include "io/Handle.hpp"
 #include "io/Hook.hpp"
-#include "io/Muxer.hpp"
-#include "io/Notifiable.hpp"
 #include "io/Reactor.hpp"
 #include "io/Runner.hpp"
 #include "io/Timer.hpp"
 #include "io/TimerFd.hpp"
+#include "io/Waker.hpp"
 
 #endif // TOOLBOX_IO_HPP

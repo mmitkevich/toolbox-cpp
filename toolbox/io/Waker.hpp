@@ -1,6 +1,6 @@
 // The Reactive C++ Toolbox.
 // Copyright (C) 2013-2019 Swirly Cloud Limited
-// Copyright (C) 2019 Reactive Markets Limited
+// Copyright (C) 2020 Reactive Markets Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,36 +14,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef TOOLBOX_IO_NOTIFIABLE_HPP
-#define TOOLBOX_IO_NOTIFIABLE_HPP
+#ifndef TOOLBOX_IO_WAKER_HPP
+#define TOOLBOX_IO_WAKER_HPP
 
 #include <toolbox/Config.h>
 
 namespace toolbox {
 inline namespace io {
 
-/// The Notifiable is implemented by types that may be woken-up, interrupted or otherwise notified
-/// of an asynchronous event.
-class TOOLBOX_API Notifiable {
+/// The Waker is implemented by types that may be woken-up, interrupted or otherwise notified
+/// asynchronously.
+class TOOLBOX_API Waker {
   public:
-    Notifiable() noexcept = default;
-    virtual ~Notifiable();
+    Waker() noexcept = default;
+    virtual ~Waker();
 
     // Copy.
-    Notifiable(const Notifiable&) noexcept = default;
-    Notifiable& operator=(const Notifiable&) noexcept = default;
+    Waker(const Waker&) noexcept = default;
+    Waker& operator=(const Waker&) noexcept = default;
 
     // Move.
-    Notifiable(Notifiable&&) noexcept = default;
-    Notifiable& operator=(Notifiable&&) noexcept = default;
+    Waker(Waker&&) noexcept = default;
+    Waker& operator=(Waker&&) noexcept = default;
 
-    void notify() noexcept { do_notify(); }
+    void wakeup() noexcept { do_wakeup(); }
 
   protected:
-    virtual void do_notify() noexcept = 0;
+    virtual void do_wakeup() noexcept = 0;
 };
 
 } // namespace io
 } // namespace toolbox
 
-#endif // TOOLBOX_IO_NOTIFIABLE_HPP
+#endif // TOOLBOX_IO_WAKER_HPP

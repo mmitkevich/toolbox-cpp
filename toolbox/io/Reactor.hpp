@@ -1,6 +1,6 @@
 // The Reactive C++ Toolbox.
 // Copyright (C) 2013-2019 Swirly Cloud Limited
-// Copyright (C) 2019 Reactive Markets Limited
+// Copyright (C) 2020 Reactive Markets Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 #ifndef TOOLBOX_IO_REACTOR_HPP
 #define TOOLBOX_IO_REACTOR_HPP
 
+#include <toolbox/io/Epoll.hpp>
 #include <toolbox/io/EventFd.hpp>
 #include <toolbox/io/Hook.hpp>
-#include <toolbox/io/Muxer.hpp>
-#include <toolbox/io/Notifiable.hpp>
+#include <toolbox/io/Waker.hpp>
 #include <toolbox/io/Timer.hpp>
 
 namespace toolbox {
@@ -31,9 +31,9 @@ enum class Priority { High = 0, Low = 1 };
 
 using IoSlot = BasicSlot<CyclTime, int, unsigned>;
 
-class TOOLBOX_API Reactor : public Notifiable {
+class TOOLBOX_API Reactor : public Waker {
   public:
-    using Event = typename Muxer::Event;
+    using Event = EpollEvent;
     class Handle {
       public:
         Handle(Reactor& reactor, int fd, int sid)
@@ -144,7 +144,7 @@ class TOOLBOX_API Reactor : public Notifiable {
 
   protected:
     /// Thread-safe.
-    void do_notify() noexcept final;
+    void do_wakeup() noexcept final;
 
   private:
     MonoTime next_expiry(MonoTime next) const;
@@ -161,7 +161,7 @@ class TOOLBOX_API Reactor : public Notifiable {
         unsigned events{};
         IoSlot slot;
     };
-    Muxer mux_;
+    Epoll epoll_;
     std::vector<Data> data_;
     EventFd notify_{0, EFD_NONBLOCK};
     static_assert(static_cast<int>(Priority::High) == 0);
