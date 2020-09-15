@@ -39,7 +39,13 @@ namespace {
 const char* labels_[] = {"CRIT", "ERROR", "WARNING", "NOTICE", "INFO", "DEBUG"};
 
 // Global log level and logger function.
-atomic<int> level_{Log::Info};
+atomic<int> level_{
+#ifdef NDEBUG
+    Log::Info
+#else
+    Log::Debug
+#endif
+};
 atomic<Logger> logger_{std_logger};
 mutex mutex_;
 
