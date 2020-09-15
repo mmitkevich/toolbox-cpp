@@ -26,8 +26,11 @@ namespace toolbox {
 inline namespace io {
 class Reactor;
 
+TOOLBOX_API void run_reactor(Reactor& r, const std::atomic<bool>& stop);
+
 class TOOLBOX_API ReactorRunner {
   public:
+    /// Start new thread and run
     ReactorRunner(Reactor& r, ThreadConfig config);
     ~ReactorRunner();
 
