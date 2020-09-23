@@ -47,7 +47,10 @@ int SigWait::operator()() const
     const auto finally = make_finally([&]() noexcept { CyclTime::now(); });
 
     siginfo_t info;
-    if (sigwaitinfo(&new_mask_, &info) < 0) {
+    int rc;
+    while((rc = sigwaitinfo(&new_mask_, &info)) < 0) {
+        if(errno == EINTR)
+            continue;
         throw std::system_error{make_sys_error(errno), "sigwaitinfo"};
     }
     return info.si_signo;
