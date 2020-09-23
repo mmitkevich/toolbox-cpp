@@ -24,6 +24,12 @@
 namespace toolbox {
 inline namespace net {
 
+/// StreamConnectable {
+///.  on_sock_connect(CyclTime now, StreamSockClnt clnt, const EndPoint& ep);
+///.  on_sock_connect(CyclTime now, std::move(sock), const EndPoint& ep);
+///   on_sock_connect_error(CyclTime now, std::exception& e);
+/// }
+
 template <typename DerivedT>
 class StreamConnector {
   public:
