@@ -14,6 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "toolbox/bm/Suite.hpp"
+#include "toolbox/hdr/Histogram.hpp"
+#include "toolbox/sys/Log.hpp"
+#include "toolbox/sys/Time.hpp"
+#include <exception>
+#include <string_view>
 #include <toolbox/io.hpp>
 #include <toolbox/net.hpp>
 #include <toolbox/sys.hpp>
@@ -26,7 +32,7 @@ using namespace toolbox;
 
 namespace {
 
-constexpr auto PingInterval = 100ms;
+constexpr auto PingInterval = 1ms;
 
 class EchoConn {
 
@@ -45,10 +51,13 @@ class EchoConn {
     void dispose(CyclTime now) noexcept
     {
         TOOLBOX_INFO << "connection closed";
+        TOOLBOX_INFO << roundtrip_histogram().report(true);
         delete this;
     }
     boost::intrusive::list_member_hook<AutoUnlinkOption> list_hook;
-
+    HdrHistogram& roundtrip_histogram() {
+        return roundtrip_histogram_;
+    }
   private:
     ~EchoConn() = default;
     void on_input(CyclTime now, int fd, unsigned events)
@@ -66,11 +75,13 @@ class EchoConn {
                 // Parse each buffered line.
                 auto fn = [this](std::string_view line) {
                     ++count_;
+                    auto rtt = MonoClock::now() - sent_time_;
+                    roundtrip_histogram_.record_value(rtt.count());
                     // Echo bytes back to client.
-                    TOOLBOX_INFO << "received: " << line;
+                    TOOLBOX_DEBUG << "received (" << rtt.count() <<" ns): " << line;
                 };
                 buf_.consume(parse_line(buf_.str(), fn));
-                if (count_ == 5) {
+                if (count_ == 1000) {
                     dispose(now);
                     return;
                 }
@@ -83,9 +94,12 @@ class EchoConn {
     void on_timer(CyclTime now, Timer& tmr)
     {
         try {
-            if (sock_.send("ping\n", 5, 0) < 5) {
+            std::string_view line = "ping\n";
+            sent_time_ = MonoClock::now();
+            if (sock_.send(line.data(), line.size(), 0) < line.size()) {
                 throw runtime_error{"partial write"};
             }
+            TOOLBOX_DEBUG << "sent: " << line;
         } catch (const std::exception& e) {
             TOOLBOX_ERROR << "failed to write data: " << e.what();
             dispose(now);
@@ -96,6 +110,8 @@ class EchoConn {
     Reactor::Handle sub_;
     Buffer buf_;
     Timer tmr_;
+    MonoTime sent_time_;
+    HdrHistogram roundtrip_histogram_{1, 1'000'000, 3};
     int count_{0};
 };
 
@@ -120,7 +136,10 @@ class EchoClnt : public StreamConnector<EchoClnt> {
     ~EchoClnt()
     {
         const auto now = CyclTime::current();
-        conn_list_.clear_and_dispose([now](auto* conn) { conn->dispose(now); });
+        conn_list_.clear_and_dispose([now](auto* conn) { 
+            conn->dispose(now);
+        });
+        
     }
 
   private:
@@ -202,24 +221,28 @@ int main(int argc, char* argv[])
         // Wait for termination.
         SigWait sig_wait;
         for (;;) {
+            try {
             switch (const auto sig = sig_wait()) {
-            case SIGHUP:
-                TOOLBOX_INFO << "received SIGHUP";
-                continue;
-            case SIGINT:
-                TOOLBOX_INFO << "received SIGINT";
+                case SIGHUP:
+                    TOOLBOX_INFO << "received SIGHUP";
+                    continue;
+                case SIGINT:
+                    TOOLBOX_INFO << "received SIGINT";
+                    break;
+                case SIGTERM:
+                    TOOLBOX_INFO << "received SIGTERM";
+                    break;
+                default:
+                    TOOLBOX_INFO << "received signal: " << sig;
+                    continue;
+                }
                 break;
-            case SIGTERM:
-                TOOLBOX_INFO << "received SIGTERM";
-                break;
-            default:
-                TOOLBOX_INFO << "received signal: " << sig;
+            }catch(const std::exception& e) {
+                TOOLBOX_ERROR << "exception: " << e.what();        
                 continue;
             }
-            break;
         }
         ret = 0;
-
     } catch (const std::exception& e) {
         TOOLBOX_ERROR << "exception: " << e.what();
     }
