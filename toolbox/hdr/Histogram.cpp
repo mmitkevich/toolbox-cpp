@@ -14,9 +14,13 @@
 // limitations under the License.
 
 #include "Histogram.hpp"
+#include "Utility.hpp"
 
 #include <cmath>
 #include <stdexcept>
+#include <sstream>
+#include <iomanip>
+#include <boost/io/ios_state.hpp>
 
 namespace toolbox {
 inline namespace hdr {
@@ -288,6 +292,25 @@ void HdrHistogram::update_min_max(int64_t value) noexcept
         min_value_ = std::min(min_value_, value);
     }
     max_value_ = std::max(max_value_, value);
+}
+
+std::string HdrHistogram::report(bool with_columns, const char* name,  double value_scale)
+{
+    std::stringstream os;
+    boost::io::ios_all_saver all_saver{os};
+
+    // clang-format off
+    os  << left  << setw(45) << name
+        << right << setw(15) << (with_columns ? "COUNT:":"") << total_count()
+        << right << setw(10) << (with_columns ? "MIN:":"") << min() / value_scale
+        << right << setw(10) << (with_columns ? "%50:":"") << value_at_percentile(*this, 50) / value_scale
+        << right << setw(10) << (with_columns ? "%95:":"") << value_at_percentile(*this, 95) / value_scale
+        << right << setw(10) << (with_columns ? "%99:":"") << value_at_percentile(*this, 99) / value_scale
+        << right << setw(10) << (with_columns ? "%99.9:":"") << value_at_percentile(*this, 99.9) / value_scale
+        << right << setw(10) << (with_columns ? "%99.99:":"") << value_at_percentile(*this, 99.99) / value_scale
+        << endl;
+    // clang-format on
+    return os.str();
 }
 
 } // namespace hdr

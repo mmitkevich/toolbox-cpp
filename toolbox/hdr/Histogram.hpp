@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <string>
 
 namespace toolbox {
 /// A C++ port of HdrHistogram_c written Michael Barker and released to the public domain.
@@ -144,6 +145,12 @@ class TOOLBOX_API HdrHistogram {
     /// true otherwise.
     bool record_values(std::int64_t value, std::int64_t count) noexcept;
 
+    /// Print report
+    ///
+    /// \param name Name of the report
+    /// \param value_scale Value divisor
+    /// \return Report string
+    std::string report(bool with_columns = false, const char* name = "", double value_scale = 1.0);
   private:
     std::int32_t normalize_index(std::int32_t index) const noexcept;
     std::int32_t get_bucket_index(std::int64_t value) const noexcept;

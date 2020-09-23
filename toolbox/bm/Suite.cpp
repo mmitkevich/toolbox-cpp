@@ -15,11 +15,10 @@
 
 #include "Suite.hpp"
 
-#include <toolbox/hdr/Utility.hpp>
-
-#include <boost/io/ios_state.hpp>
-
+#include <sstream>
 #include <iomanip>
+#include <boost/io/ios_state.hpp>
+#include <toolbox/hdr/Utility.hpp>
 
 namespace toolbox::bm {
 using namespace std;
@@ -48,19 +47,7 @@ BenchmarkSuite::BenchmarkSuite(std::ostream& os, double value_scale)
 
 void BenchmarkSuite::report(const char* name, HdrHistogram& h)
 {
-    boost::io::ios_all_saver all_saver{os_};
-
-    // clang-format off
-    os_ << left << setw(45) << name
-        << right << setw(15) << h.total_count()
-        << right << setw(10) << h.min() / value_scale_
-        << right << setw(10) << value_at_percentile(h, 50) / value_scale_
-        << right << setw(10) << value_at_percentile(h, 95) / value_scale_
-        << right << setw(10) << value_at_percentile(h, 99) / value_scale_
-        << right << setw(10) << value_at_percentile(h, 99.9) / value_scale_
-        << right << setw(10) << value_at_percentile(h, 99.99) / value_scale_
-        << endl;
-    // clang-format on
+    os_ << h.report(false, name, value_scale_);
 }
 
 } // namespace toolbox::bm
