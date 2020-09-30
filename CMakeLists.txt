@@ -19,6 +19,8 @@ cmake_minimum_required(VERSION 3.12)
 project(toolbox-cpp)
 include(GNUInstallDirs)
 
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
+
 # Configuration options:
 set(REACTIVE_BUILD_ARCH "native" CACHE STRING "Target architecture.")
 set(REACTIVE_BUILD_SHARED ON CACHE BOOL "Enable shared libs.")
@@ -161,6 +163,8 @@ find_package(Doxygen) # Optional.
 
 find_package(CURL) 
 include_directories(SYSTEM ${CURL_INCLUDE_DIR})
+
+find_package(PCAP)
 
 if(TOOLBOX_BUILD_SHARED)
   set(tb_core_LIBRARY tb-core-shared)

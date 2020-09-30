@@ -85,6 +85,7 @@ set(lib_SOURCES
   net/StreamAcceptor.cpp
   net/StreamConnector.cpp
   net/StreamSock.cpp
+  net/Pcap.cpp
   sys/Daemon.cpp
   sys/Date.cpp
   sys/Error.cpp
@@ -141,7 +142,7 @@ install(TARGETS tb-core-static DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT sta
 if(TOOLBOX_BUILD_SHARED)
   add_library(tb-core-shared SHARED ${lib_SOURCES})
   set_target_properties(tb-core-shared PROPERTIES OUTPUT_NAME tb-core)
-  target_link_libraries(tb-core-shared pthread)
+  target_link_libraries(tb-core-shared pthread ${PCAP_LIBRARY})
   install(TARGETS tb-core-shared DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT shared)
 endif()
 
@@ -155,13 +156,13 @@ set(lib_bm_SOURCES
 
 add_library(tb-bm-static STATIC ${lib_bm_SOURCES})
 set_target_properties(tb-bm-static PROPERTIES OUTPUT_NAME tb-bm)
-target_link_libraries(tb-bm-static ${tb_core_LIBRARY})
+target_link_libraries(tb-bm-static ${tb_core_LIBRARY} ${PCAP_LIBRARY})
 install(TARGETS tb-bm-static DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT static)
 
 if(TOOLBOX_BUILD_SHARED)
   add_library(tb-bm-shared SHARED ${lib_bm_SOURCES})
   set_target_properties(tb-bm-shared PROPERTIES OUTPUT_NAME tb-bm)
-  target_link_libraries(tb-bm-shared ${tb_core_LIBRARY})
+  target_link_libraries(tb-bm-shared ${tb_core_LIBRARY} ${PCAP_LIBRARY})
   install(TARGETS tb-bm-shared DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT shared)
 endif()
 
@@ -233,6 +234,7 @@ set(test_SOURCES
   net/Resolver.ut.cpp
   net/Runner.ut.cpp
   net/Socket.ut.cpp
+  net/Pcap.ut.cpp
   sys/Date.ut.cpp
   sys/Log.ut.cpp
   sys/Thread.ut.cpp
@@ -266,6 +268,7 @@ set(test_SOURCES
 add_executable(tb-core-test
   ${test_SOURCES}
   Main.ut.cpp)
+message("Boost UT ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}")
 target_link_libraries(tb-core-test
   ${tb_core_LIBRARY} "${Boost_UNIT_TEST_FRAMEWORK_LIBRARY}" stdc++fs)
 
