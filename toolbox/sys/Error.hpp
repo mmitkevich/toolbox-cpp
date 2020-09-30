@@ -17,6 +17,7 @@
 #ifndef TOOLBOX_SYS_ERROR_HPP
 #define TOOLBOX_SYS_ERROR_HPP
 
+#include <errno.h>
 #include <system_error>
 
 namespace toolbox {
