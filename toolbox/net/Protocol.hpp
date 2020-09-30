@@ -26,6 +26,26 @@
 namespace toolbox {
 inline namespace net {
 
+struct IpProtocol {
+public:
+  template<typename ProtocolT>
+  constexpr explicit IpProtocol(const ProtocolT &rhs)
+  : family_(rhs.family())
+  , protocol_(rhs.protocol())
+  , type_(rhs.type())  
+  {}
+  constexpr IpProtocol(int family = AF_UNSPEC, int protocol = IPPROTO_IP, int type = 0 /*SOCK_DGRAM*/)
+  : family_(family)
+  , protocol_(protocol)
+  , type_(type)
+  {}
+  constexpr int family() const noexcept { return family_; }
+  constexpr int protocol() const noexcept { return protocol_; }
+  constexpr int type() const noexcept { return type_; }
+private:
+   int family_, protocol_, type_;
+};
+
 struct DgramProtocol {
     friend bool operator==(DgramProtocol lhs, DgramProtocol rhs)
     {
