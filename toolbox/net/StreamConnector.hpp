@@ -62,7 +62,9 @@ class StreamConnector {
         std::error_code ec;
         sock.connect(ep, ec);
         if (ec) {
-            if (ec != std::errc::operation_in_progress) {
+            // FIXME: wrong code on centos 6
+            // if (ec != std::errc::operation_in_progress)
+            if (ec.value() != EINPROGRESS) {
                 throw std::system_error{ec, "connect"};
             }
             sub_
