@@ -143,7 +143,9 @@ int main(int argc, char* argv[])
         const auto start_time = CyclTime::now();
 
         Reactor reactor{1024};
-        const TcpEndpoint ep{TcpProtocol::v4(), 7777};
+        const char* addr = argc>1 ? argv[1] : "127.0.0.1:7777";
+        const StreamEndpoint ep = parse_stream_endpoint(addr);
+        //const TcpEndpoint ep{TcpProtocol::v4(), 7777};
         EchoServ echo_serv{start_time, reactor, ep};
 
         // Start service threads.

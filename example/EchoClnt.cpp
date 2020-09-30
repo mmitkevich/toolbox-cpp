@@ -16,6 +16,7 @@
 
 #include "toolbox/bm/Suite.hpp"
 #include "toolbox/hdr/Histogram.hpp"
+#include "toolbox/net/Endpoint.hpp"
 #include "toolbox/sys/Log.hpp"
 #include "toolbox/sys/Time.hpp"
 #include <exception>
@@ -26,6 +27,8 @@
 #include <toolbox/util.hpp>
 
 #include <boost/intrusive/list.hpp>
+
+#define OPENONLOAD
 
 using namespace std;
 using namespace toolbox;
@@ -124,11 +127,12 @@ class EchoClnt : public StreamConnector<EchoClnt> {
     using ConnList = boost::intrusive::list<EchoConn, ConstantTimeSizeOption, MemberHookOption>;
 
   public:
-    EchoClnt(CyclTime now, Reactor& reactor, Resolver& resolver, const string& uri)
+    EchoClnt(CyclTime now, Reactor& reactor, Resolver& resolver, const string& uri, const string& local_uri)
     : reactor_{reactor}
     , resolver_{resolver}
     , uri_{uri}
     , ep_{parse_stream_endpoint(uri)}
+    , local_uri_(local_uri)
     {
         // Immediate and then at 5s intervals.
         tmr_ = reactor_.timer(now.mono_time(), 5s, Priority::Low, bind<&EchoClnt::on_timer>(this));
@@ -145,11 +149,18 @@ class EchoClnt : public StreamConnector<EchoClnt> {
   private:
     void on_sock_prepare(CyclTime now, IoSock& sock)
     {
-        if (sock.is_ip_family()) {
-            // Set the number of SYN retransmits that TCP should send before aborting the attempt to
-            // connect.
-            set_tcp_syn_nt(sock.get(), 1);
-        }
+        #ifndef OPENONLOAD
+            if (sock.is_ip_family()) {
+                // Set the number of SYN retransmits that TCP should send before aborting the attempt to
+                // connect.
+                set_tcp_syn_nt(sock.get(), 1);
+            }
+        #else
+            int on = 0;
+            os::setsockopt(sock.get(), SOL_SOCKET, SO_TIMESTAMP, (const char *)&on, sizeof(on));
+        #endif
+        auto ep = parse_stream_endpoint(local_uri_+":"+std::to_string(10000+std::rand()%10000));
+        os::bind(sock.get(), ep);
     }
     void on_sock_connect(CyclTime now, IoSock&& sock, const Endpoint& ep)
     {
@@ -196,6 +207,7 @@ class EchoClnt : public StreamConnector<EchoClnt> {
     Timer tmr_;
     AddrInfoFuture aifuture_;
     Endpoint ep_;
+    std::string local_uri_;
     bool inprogress_{false};
     // List of active connections.
     ConnList conn_list_;
@@ -211,7 +223,9 @@ int main(int argc, char* argv[])
 
         Reactor reactor{1024};
         Resolver resolver;
-        EchoClnt echo_clnt{start_time, reactor, resolver, "tcp4://127.0.0.1:7777"};
+        const char* addr = argc>1 ? argv[1] : "tcp4://127.0.0.1:7777";
+        const char* local_addr = argc>2 ? argv[2] : "127.0.0.1";
+        EchoClnt echo_clnt{start_time, reactor, resolver, addr, local_addr};
 
         // Start service threads.
         pthread_setname_np(pthread_self(), "main");
