@@ -30,11 +30,28 @@ void tuple_apply(const TupleT& tpl, const FnT& f)
     f(v);
 }
 
+template <std::size_t IndexN, typename TupleT, typename FnT>
+void tuple_apply(TupleT& tpl, const FnT& f)
+{
+    auto& v = std::get<IndexN>(tpl);
+    f(v);
+}
+
 /// Calling fn over each tuple element.
 /// N.B the limitation is function object must be an template lambda or function, accept
 /// all the types in the tuple.
 template <typename TupleT, typename FnT, std::size_t IndexN = 0>
 void tuple_for_each(const TupleT& tpl, const FnT& f)
+{
+    constexpr auto tuple_size = std::tuple_size_v<TupleT>;
+    if constexpr (IndexN < tuple_size) {
+        tuple_apply<IndexN>(tpl, f);
+        tuple_for_each<TupleT, FnT, IndexN + 1>(tpl, f);
+    }
+}
+
+template <typename TupleT, typename FnT, std::size_t IndexN = 0>
+void tuple_for_each(TupleT& tpl, const FnT& f)
 {
     constexpr auto tuple_size = std::tuple_size_v<TupleT>;
     if constexpr (IndexN < tuple_size) {

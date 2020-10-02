@@ -20,6 +20,7 @@
 #include <toolbox/util/Utility.hpp>
 
 #include <string>
+#include <optional>
 
 namespace toolbox {
 inline namespace util {
@@ -76,6 +77,12 @@ struct is_string<std::string> : std::true_type {
 };
 template <>
 struct is_string<std::string_view> : std::true_type {
+};
+
+template<typename T>
+struct TypeTraits<std::optional<T>> {
+    static std::optional<T> from_string(std::string_view sv) noexcept { return TypeTraits<T>::from_string(sv); }
+    static std::optional<T> from_string(const std::string& s) noexcept { return TypeTraits<T>::from_string(s); }
 };
 
 } // namespace util
