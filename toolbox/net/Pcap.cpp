@@ -20,11 +20,13 @@ PcapPacket::PcapPacket(const pcap_pkthdr* pkthdr, const u_char* packet)
 , packet(packet)
 {}
 
-std::size_t PcapPacket::len() const {
+std::size_t PcapPacket::len() const
+{
     return pkthdr->len;
 }
 
-const char* PcapPacket::data() const {
+const char* PcapPacket::data() const
+{
     switch(ip_hdr()->ip_p) {
         case IPPROTO_TCP: 
             return (char*)(packet + sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct tcphdr));
@@ -36,7 +38,8 @@ const char* PcapPacket::data() const {
     }
 }
 
-std::size_t PcapPacket::size() const {
+std::size_t PcapPacket::size() const
+{
     switch(ip_hdr()->ip_p) {
         case IPPROTO_TCP:
             return pkthdr->len - (sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct tcphdr));
@@ -48,23 +51,28 @@ std::size_t PcapPacket::size() const {
     }
 }
 
-const struct ether_header* PcapPacket::ether_hdr() const {
+const struct ether_header* PcapPacket::ether_hdr() const
+{
     return reinterpret_cast<const struct ether_header*>(packet);
 }
 
-const struct ip* PcapPacket::ip_hdr() const {
+const struct ip* PcapPacket::ip_hdr() const
+{
     return reinterpret_cast<const struct ip*>(packet+sizeof(struct ether_header));
 }
 
-const struct tcphdr* PcapPacket::tcp_hdr() const {
+const struct tcphdr* PcapPacket::tcp_hdr() const
+{
     return reinterpret_cast<const struct tcphdr*>(packet+sizeof(struct ether_header));
 }
 
-const struct udphdr* PcapPacket::udp_hdr() const {
+const struct udphdr* PcapPacket::udp_hdr() const
+{
     return reinterpret_cast<const struct udphdr*>(packet+sizeof(struct ether_header));
 }
 
-IpProtocol PcapPacket::protocol() const {
+IpProtocol PcapPacket::protocol() const
+{
     int sock_type = 0;
     int ip_proto = ip_hdr()->ip_p;
     int family = AF_UNSPEC;
@@ -79,7 +87,8 @@ IpProtocol PcapPacket::protocol() const {
     return IpProtocol(family, ip_proto, sock_type);
 }
 
-u_int PcapPacket::src_port() const {
+u_int PcapPacket::src_port() const
+{
     int ip_proto = ip_hdr()->ip_p;
     switch(ip_proto) {
         case IPPROTO_TCP: return ntohs(tcp_hdr()->source);
@@ -88,7 +97,8 @@ u_int PcapPacket::src_port() const {
     }
 }
 
-u_int PcapPacket::dst_port() const {
+u_int PcapPacket::dst_port() const
+{
     int ip_proto = ip_hdr()->ip_p;
     switch(ip_proto) {
         case IPPROTO_TCP: return ntohs(tcp_hdr()->dest);
@@ -97,35 +107,44 @@ u_int PcapPacket::dst_port() const {
     }
 }
 
-std::string PcapPacket::src_host() const {
+std::string PcapPacket::src_host() const
+{
      char buf[INET_ADDRSTRLEN] = "\0";
      inet_ntop(AF_INET, &(ip_hdr()->ip_src), buf, INET_ADDRSTRLEN);
      return buf;
 }
 
-std::string PcapPacket::dst_host() const {
+std::string PcapPacket::dst_host() const
+{
      char buf[INET_ADDRSTRLEN] = "\0";
      inet_ntop(AF_INET, &(ip_hdr()->ip_dst), buf, INET_ADDRSTRLEN);
      return buf;
 }
 
-PcapDevice::PcapDevice(std::string_view path)
+void PcapDevice::input(std::string_view input)
 {
-    pcap_t *fp;
+    input_ = input;
+}
+
+void PcapDevice::open()
+{
     char errbuf[PCAP_ERRBUF_SIZE];
-    pcap_file_ = pcap_open_offline(path.data(), errbuf);
-    if (pcap_file_ == NULL) {
-	    throw std::runtime_error(std::string(errbuf));
-    }
+    handle_ = pcap_open_offline(input_.data(), errbuf);
+    assert(handle_!=nullptr);
+}
+
+void PcapDevice::close()
+{
+    if(handle_!=nullptr)
+        pcap_close(handle_);
 }
 
 PcapDevice::~PcapDevice()
 {
-    assert(pcap_file_!=nullptr);
-    pcap_close(pcap_file_);
+    close();
 }
 
-void PcapDevice::on_packet(OnPacket on_packet)
+void PcapDevice::packet(OnPacket on_packet)
 {
     on_packet_ = on_packet;
 }
@@ -151,13 +170,20 @@ void PcapDevice::packet_handler(const struct pcap_pkthdr* pkthdr, const u_char* 
 
 int PcapDevice::loop()
 {
-    int rc = pcap_loop(pcap_file_, max_packet_count_, pcap_packet_handler, (u_char*) this);
+    assert(handle_!=nullptr);
+
+    int rc = pcap_loop(handle_, max_packet_count_, pcap_packet_handler, (u_char*) this);
     if(rc>=0) {
         return rc;
     }
     switch(rc) {
-        case -1: throw std::runtime_error(std::string(pcap_geterr(pcap_file_)));
+        case -1: throw PcapError(std::string(pcap_geterr(handle_)));
         case -2: return rc; // break called
-        default: throw std::runtime_error("invalid pcap return code");
+        default: throw PcapError("invalid pcap return code");
     }
+}
+
+void PcapDevice::run() {
+    open();
+    loop();
 }

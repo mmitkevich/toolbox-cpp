@@ -1,6 +1,7 @@
 #pragma once
 #include <ostream>
 #include <pcap/pcap.h>
+#include <stdexcept>
 #include <string_view>
 #include <functional>
 #include <iostream>
@@ -18,6 +19,14 @@ extern "C" {
 
 namespace toolbox {
 inline namespace net {
+
+class PcapError : public std::runtime_error {
+public:
+    PcapError(const char* msg)
+    : std::runtime_error(msg) {}
+    PcapError(std::string msg)
+    : std::runtime_error(msg) {}
+};
 
 struct TOOLBOX_API PcapPacket {
     const pcap_pkthdr* pkthdr;
@@ -57,18 +66,23 @@ class TOOLBOX_API PcapDevice {
 public:
     using OnPacket = std::function<void(const PcapPacket& pkt)>;
 public:
-    PcapDevice(std::string_view file);
     ~PcapDevice();
-    void on_packet(OnPacket on_packet);
+    void input(std::string_view input);
+    std::string_view input() const { return input_; }
+    void packet(OnPacket on_packet);
+    void open();
+    void close();
     int loop();
+    void run();
     void max_packet_count(int cnt);
 private:
     void packet_handler(const struct pcap_pkthdr* pkthdr, const u_char* packet);
     static void pcap_packet_handler(u_char *userData, const struct pcap_pkthdr* pkthdr, const u_char* packet);
 private:
-    pcap_t* pcap_file_{nullptr};
+    pcap_t* handle_{nullptr};
     OnPacket on_packet_{};
     int max_packet_count_{0};
+    std::string input_;
 };
 
 } // namespace pcap

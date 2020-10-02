@@ -20,7 +20,8 @@ BOOST_AUTO_TEST_CASE(PcapFile)
 {
     const char* PCAP_FILE = "./test.pcap";
     TOOLBOX_INFO << "reading "<<PCAP_FILE;
-    PcapDevice pcap(PCAP_FILE);
+    PcapDevice pcap;
+    pcap.input_file(PCAP_FILE);
     pcap.max_packet_count(100000);
     struct filter {
         std::string host;
@@ -31,7 +32,7 @@ BOOST_AUTO_TEST_CASE(PcapFile)
     std::size_t nfound = 0;
     std::unordered_map<std::string, ulong> host_stats;
 
-    pcap.on_packet([&](const PcapPacket& pkt) {
+    pcap.packet([&](const PcapPacket& pkt) {
         //TOOLBOX_INFO << pkt;
         std::string  dst_host = pkt.dst_host();
         host_stats[dst_host+":"+std::to_string(pkt.dst_port())]++;
