@@ -17,9 +17,11 @@
 #ifndef TOOLBOX_UTIL_SLOT_HPP
 #define TOOLBOX_UTIL_SLOT_HPP
 
+#include <boost/container/small_vector.hpp>
 #include <toolbox/util/Traits.hpp>
 
 #include <utility>
+#include <algorithm>
 
 namespace toolbox {
 inline namespace util {
@@ -113,6 +115,67 @@ constexpr auto bind(ClassT* obj) noexcept
     using Slot = typename Traits::template Pack<BasicSlot>;
     return Slot{}.template bind<MemFnT>(obj);
 }
+
+template<std::size_t Capacity, typename...ArgsT>
+class BasicSignal {
+public:
+    using Slot = BasicSlot<ArgsT...>;
+    class Handle {
+        BasicSignal &self;
+        Slot slot;
+    public:
+        Handle(BasicSignal& self, Slot slot) noexcept
+        : self(self), slot(slot) {
+            self.connect(slot);
+        }
+        Handle(const Handle&) noexcept = delete;
+        Handle(Handle&& rhs) noexcept = default;
+        ~Handle() {
+            self.disconnect(slot);
+        }
+    };
+    
+    Handle subscribe(Slot slot) {
+        return Handle(*this, slot);
+    }
+
+    bool connect(Slot slot) {
+        auto it = std::find(slots_.begin(), slots_.end(), slot);
+        if(it==slots_.end()) {
+            slots_.emplace_back(slot);
+            return true;
+        }
+        return false;
+    }
+    bool disconnect(Slot slot) {
+        auto it = std::find(slots_.begin(), slots_.end(), slot);
+        if(it!=slots_.end()) {
+            slots_.erase(it);
+            return true;
+        }
+        return false;
+    }
+    void disconnect_all() {
+        slots_.clear();
+    }
+    void invoke(ArgsT... args) const { 
+        for(auto& slot: slots_) {
+            slot(std::forward<ArgsT>(args)...);
+        }
+    }
+    void operator()(ArgsT... args) const { 
+        for(auto& slot: slots_) {
+            slot(std::forward<ArgsT>(args)...);
+        }
+    }
+    constexpr bool empty() const noexcept { return slots_.empty(); }
+    constexpr explicit operator bool() const noexcept { return !slots_.empty(); }
+private:
+    boost::container::small_vector<Slot, Capacity> slots_;
+};
+
+template<typename...Args>
+using Signal = BasicSignal<16, Args...>;
 
 } // namespace util
 } // namespace toolbox

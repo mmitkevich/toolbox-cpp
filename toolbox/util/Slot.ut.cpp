@@ -146,4 +146,21 @@ BOOST_AUTO_TEST_CASE(SlotRvalueFunCase)
     BOOST_TEST(x == 11);
 }
 
+BOOST_AUTO_TEST_CASE(SignalCase)
+{
+    Signal<int> sig;
+    int x {2};
+    auto fn1 = [&x](int y) { x+=y; };
+    auto fn2 = [&x](int y) { x+=2*y; };
+    sig.connect(toolbox::bind(&fn1));
+    sig(5);
+    BOOST_TEST(x==2+5);
+    sig.connect(toolbox::bind(&fn2));
+    sig(6);
+    BOOST_TEST(x==2+5+3*6);
+    sig.disconnect(toolbox::bind(&fn1));
+    sig(7);
+    BOOST_TEST(x==2+5+3*6+2*7);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
