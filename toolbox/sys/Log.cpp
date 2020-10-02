@@ -36,14 +36,14 @@ inline namespace sys {
 using namespace std;
 namespace {
 
-const char* labels_[] = {"CRIT", "ERROR", "WARNING", "NOTICE", "INFO", "DEBUG"};
+const char* labels_[] = {"CRIT", "ERROR", "WARNING", "NOTICE", "INFO", "DEBUG", "DUMP"};
 
 // Global log level and logger function.
 atomic<int> level_{
-#ifdef NDEBUG
-    Log::Info
+#if TOOLBOX_BUILD_DEBUG
+    Log::Dump
 #else
-    Log::Debug
+    Log::Info
 #endif
 };
 atomic<Logger> logger_{std_logger};

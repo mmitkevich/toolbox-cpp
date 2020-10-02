@@ -98,7 +98,9 @@ class Log {
         /// Information.
         Info,
         /// Debug.
-        Debug
+        Debug,
+        /// Dump.
+        Dump
     };
 
     explicit Log(int level) noexcept
