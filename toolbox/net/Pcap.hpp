@@ -8,6 +8,7 @@
 #include <pcap.h>
 #include <sys/types.h>
 
+#include <toolbox/util/Slot.hpp>
 #include "toolbox/net/Protocol.hpp"
 
 extern "C" {
@@ -46,8 +47,8 @@ struct TOOLBOX_API PcapPacket {
     IpProtocol protocol() const;
     u_int src_port() const;
     u_int dst_port() const;
-    std::string src_host() const;
-    std::string dst_host() const;
+    std::string_view src_host() const;
+    std::string_view dst_host() const;
 
     friend std::ostream& operator<<(std::ostream& os, const PcapPacket& rhs) {
         switch(rhs.protocol().protocol()) {
@@ -64,7 +65,7 @@ struct TOOLBOX_API PcapPacket {
 
 class TOOLBOX_API PcapDevice {
 public:
-    using OnPacket = std::function<void(const PcapPacket& pkt)>;
+    using OnPacket = toolbox::util::BasicSlot<const PcapPacket&>;
 public:
     ~PcapDevice();
     void input(std::string_view input);

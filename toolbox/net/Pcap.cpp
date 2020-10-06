@@ -107,16 +107,16 @@ u_int PcapPacket::dst_port() const
     }
 }
 
-std::string PcapPacket::src_host() const
+std::string_view PcapPacket::src_host() const
 {
-     char buf[INET_ADDRSTRLEN] = "\0";
+     thread_local char buf[INET_ADDRSTRLEN] = "\0";
      inet_ntop(AF_INET, &(ip_hdr()->ip_src), buf, INET_ADDRSTRLEN);
      return buf;
 }
 
-std::string PcapPacket::dst_host() const
+std::string_view PcapPacket::dst_host() const
 {
-     char buf[INET_ADDRSTRLEN] = "\0";
+     thread_local char buf[INET_ADDRSTRLEN] = "\0";
      inet_ntop(AF_INET, &(ip_hdr()->ip_dst), buf, INET_ADDRSTRLEN);
      return buf;
 }

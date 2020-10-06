@@ -21,7 +21,8 @@ BOOST_AUTO_TEST_CASE(PcapFile)
     const char* PCAP_FILE = "./test.pcap";
     TOOLBOX_INFO << "reading "<<PCAP_FILE;
     PcapDevice pcap;
-    pcap.input_file(PCAP_FILE);
+    pcap.input(PCAP_FILE);
+    pcap.open();
     pcap.max_packet_count(100000);
     struct filter {
         std::string host;
