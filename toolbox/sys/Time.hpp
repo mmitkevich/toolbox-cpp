@@ -254,7 +254,7 @@ struct PutTime {
 };
 
 template <typename DurationT = Seconds>
-auto put_time(WallTime t, const char* fmt) noexcept
+auto put_time(WallTime t, const char* fmt="%FT%T") noexcept
 {
     return PutTime<DurationT>{t, fmt};
 }
