@@ -18,13 +18,29 @@
 #define TOOLBOX_NET_IPADDR_HPP
 
 #include <boost/asio/ip/address.hpp>
+#include "toolbox/util/TypeTraits.hpp"
 
 namespace toolbox {
 inline namespace net {
+
 using IpAddr = boost::asio::ip::address;
 using IpAddrV4 = boost::asio::ip::address_v4;
 using IpAddrV6 = boost::asio::ip::address_v6;
+
 } // namespace net
+
+inline namespace util {
+template <>
+struct TypeTraits<IpAddrV4> {
+    static auto from_string(std::string_view sv) { return boost::asio::ip::make_address_v4(std::string{sv}); }
+    static auto from_string(const std::string& s) { return boost::asio::ip::make_address_v4(s); }
+};
+template <>
+struct TypeTraits<IpAddrV6> {
+    static auto from_string(std::string_view sv) { return boost::asio::ip::make_address_v6(std::string{sv}); }
+    static auto from_string(const std::string& s) { return boost::asio::ip::make_address_v6(s); }
+};
+} // namespace util
 } // namespace toolbox
 
 #endif // TOOLBOX_NET_IPADDR_HPP
