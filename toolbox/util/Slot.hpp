@@ -92,6 +92,9 @@ class BasicSlot {
     void (*fn_)(void*, ArgsT...){nullptr};
 };
 
+template<typename...ArgsT>
+using Slot = BasicSlot<ArgsT...>;
+
 template <auto FnT>
 constexpr auto bind() noexcept
 {
