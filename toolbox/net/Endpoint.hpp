@@ -24,6 +24,7 @@
 #include <boost/asio/generic/basic_endpoint.hpp>
 #include <boost/asio/ip/basic_endpoint.hpp>
 #include <boost/asio/local/basic_endpoint.hpp>
+#include <string_view>
 
 namespace toolbox {
 inline namespace net {
@@ -35,10 +36,12 @@ using DgramEndpoint = BasicEndpoint<DgramProtocol>;
 using StreamEndpoint = BasicEndpoint<StreamProtocol>;
 
 template <typename ProtocolT>
-using IpEndpoint = boost::asio::ip::basic_endpoint<ProtocolT>;
+using BasicIpEndpoint = boost::asio::ip::basic_endpoint<ProtocolT>;
 
-using UdpEndpoint = IpEndpoint<UdpProtocol>;
-using TcpEndpoint = IpEndpoint<TcpProtocol>;
+using IpEndpoint = BasicIpEndpoint<IpProtocol>;
+using UdpEndpoint = BasicIpEndpoint<UdpProtocol>;
+using TcpEndpoint = BasicIpEndpoint<TcpProtocol>;
+
 
 template <typename ProtocolT>
 using UnixEndpoint = boost::asio::local::basic_endpoint<ProtocolT>;
@@ -88,4 +91,13 @@ TOOLBOX_API std::ostream& operator<<(std::ostream& os, const sockaddr_un& sa);
 TOOLBOX_API std::ostream& operator<<(std::ostream& os, const sockaddr& sa);
 TOOLBOX_API std::ostream& operator<<(std::ostream& os, const addrinfo& ai);
 
+namespace std {
+    template<typename ProtocolT>
+    struct hash<toolbox::BasicIpEndpoint<ProtocolT>> {
+        std::size_t operator()(toolbox::BasicIpEndpoint<ProtocolT> self) const {
+            std::string_view sv((char*)self.data(), self.size());//*sizeof(typename toolbox::BasicIpEndpoint<ProtocolT>::data_type)
+            return std::hash<std::string_view>{}(sv);
+        }
+    };
+}
 #endif // TOOLBOX_NET_ENDPOINT_HPP
