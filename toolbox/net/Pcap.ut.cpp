@@ -33,15 +33,18 @@ BOOST_AUTO_TEST_CASE(PcapFile)
     std::size_t nfound = 0;
     std::unordered_map<std::string, ulong> host_stats;
 
-    pcap.packet([&](const PcapPacket& pkt) {
+    auto on_packet = [&](const PcapPacket& pkt) {
         //TOOLBOX_INFO << pkt;
-        std::string  dst_host = pkt.dst_host();
-        host_stats[dst_host+":"+std::to_string(pkt.dst_port())]++;
+        std::stringstream ss;
+        std::string dst_host = pkt.dst().address().to_string();
+        ss << pkt.dst().address().to_string() << ":" << pkt.dst().port();
+        host_stats[ss.str()]++;
         if(dst_host==filter.host /*&& pkt.dst_port()==dst_port*/) {
             TOOLBOX_INFO << pkt << " | " << to_hex(std::string_view(pkt.data(), pkt.size()));
             ++nfound;
         }
-    });
+    };
+    pcap.packet(toolbox::util::bind(&on_packet));
     pcap.loop();
     TOOLBOX_INFO << "Found: "<<nfound<<" packets";
     //for(auto& [host,count]: host_stats) {
