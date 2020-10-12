@@ -19,7 +19,7 @@
 
 #include <toolbox/sys/Time.hpp>
 #include <toolbox/util/IntTypes.hpp>
-
+#include <toolbox/optional.hpp>
 #include <cassert>
 
 namespace toolbox {
@@ -182,7 +182,7 @@ static_assert(parse_date("20180117") == 20180117_ymd);
 /// - MM = 00-59;
 /// - SS = 00-60 (60 only if UTC leap second);
 /// - sss = 000-999 (indicating milliseconds).
-constexpr std::optional<WallTime> parse_time(std::string_view sv) noexcept
+constexpr toolbox::optional<WallTime> parse_time(std::string_view sv) noexcept
 {
     if (sv.size() < 8) {
         // Date part is too short.

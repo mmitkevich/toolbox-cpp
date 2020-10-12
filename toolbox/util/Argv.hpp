@@ -19,7 +19,7 @@
 
 #include <toolbox/Config.h>
 
-#include <optional>
+#include <toolbox/optional.hpp>
 #include <string_view>
 
 namespace toolbox {
@@ -101,7 +101,7 @@ class TOOLBOX_API ArgvLexer {
 
     ConstIterator it_, end_;
     std::string_view opt_;
-    std::optional<std::string_view> val_;
+    toolbox::optional<std::string_view> val_;
 };
 
 } // namespace util
