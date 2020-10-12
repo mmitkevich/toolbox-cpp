@@ -33,6 +33,8 @@ inline namespace sys {
 using namespace std::literals::chrono_literals;
 using namespace std::literals::string_view_literals;
 
+using Hours = std::chrono::hours;
+using Minutes = std::chrono::minutes;
 using Seconds = std::chrono::seconds;
 using Millis = std::chrono::milliseconds;
 using Micros = std::chrono::microseconds;
@@ -398,7 +400,7 @@ static_assert(parse_nanos("000000001") == 1ns);
 /// bandwidth-sensitive messages. Valid values: HH = 00-23, MM = 00-59, SS = 00-5960 (60 only if UTC
 /// leap second) (without milliseconds). HH = 00-23, MM = 00-59, SS = 00-5960 (60 only if UTC leap
 /// second), sss=000-999 (indicating milliseconds).
-constexpr std::optional<Nanos> parse_time_only(std::string_view sv) noexcept
+constexpr toolbox::optional<Nanos> parse_time_only(std::string_view sv) noexcept
 {
     using namespace std::chrono;
 
