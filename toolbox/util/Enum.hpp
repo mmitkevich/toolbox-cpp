@@ -35,6 +35,22 @@ constexpr typename std::underlying_type_t<EnumT> unbox(EnumT val) noexcept
     return static_cast<std::underlying_type_t<EnumT>>(val);
 }
 
+namespace operators {
+
+template <typename EnumT, typename = std::enable_if_t<std::is_enum_v<EnumT>>>
+constexpr typename std::underlying_type_t<EnumT> operator & (std::underlying_type_t<EnumT> mask, EnumT val) noexcept
+{
+    return static_cast<std::underlying_type_t<EnumT>>(val) & mask;
+}
+
+template <typename EnumT, typename = std::enable_if_t<std::is_enum_v<EnumT>>>
+constexpr typename std::underlying_type_t<EnumT> operator |= (std::underlying_type_t<EnumT> mask, EnumT val) noexcept
+{
+    return static_cast<std::underlying_type_t<EnumT>>(val) | mask;
+}
+
+}
+
 } // namespace util
 } // namespace toolbox
 
