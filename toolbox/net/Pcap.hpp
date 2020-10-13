@@ -85,48 +85,13 @@ protected:
     const u_char* packet;
 };
 
-struct HostPortFilter {
-    optional<toolbox::net::IpAddrV4> host;
-    optional<std::uint32_t> port;
-    friend std::ostream& operator<<(std::ostream& os, const HostPortFilter& self) {
-        return os << "host:"<<(self.host.has_value()?self.host.value().to_string():"none")
-           << "," << "port:"<<(self.port.has_value()?std::to_string(self.port.value()):"none");
-    }
-};
-
-struct HostPortFilters {
-    bool udp {true};
-    bool tcp {true};
-    HostPortFilter src;
-    HostPortFilter dst;
-    template<typename PcapPacketT>
-    bool operator()(const PcapPacketT& packet) {
-        if(!udp && packet.protocol().protocol()==IPPROTO_UDP)
-            return false;
-        if(!tcp && packet.protocol().protocol()==IPPROTO_TCP)
-            return false;
-        if(src.port.has_value() && src.port.value() != packet.src().port())
-            return false;
-        if(src.host.has_value() && src.host.value() != packet.src().address())
-            return false;
-        if(dst.port.has_value() && dst.port.value() != packet.dst().port())
-            return false;
-        if(dst.host.has_value() && dst.host.value() != packet.dst().address())
-            return false;
-        return true;
-    }
-    friend std::ostream& operator<<(std::ostream& os, const HostPortFilters& self) {
-       return os<<"src:{"<<self.src<<"},dst:{"<<self.dst<<"}";
-    }
-};
-
 
 class TOOLBOX_API PcapDevice
 {
 public:
     ~PcapDevice() { close(); }
     void input(std::string_view input) { input_ = input; }
-    std::string_view input() const { return input_; }
+    std::string input() const { return input_; }
     void open();
     void close();
     int loop();

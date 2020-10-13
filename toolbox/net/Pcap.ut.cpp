@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(PcapFile)
             ++nfound;
         }
     };
-    pcap.packet(toolbox::util::bind(&on_packet));
+    pcap.packets().connect(toolbox::util::bind(&on_packet));
     pcap.loop();
     TOOLBOX_INFO << "Found: "<<nfound<<" packets";
     //for(auto& [host,count]: host_stats) {
