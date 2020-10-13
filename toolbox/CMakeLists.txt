@@ -127,7 +127,9 @@ set(lib_SOURCES
   util/Utility.cpp
   util/VarSub.cpp
   util/Variant.cpp
-  util/Version.cpp)
+  util/Version.cpp
+  util/Json.cpp
+  )
 
 if(CURL_FOUND)
   set(lib_SOURCES, ${lib_SOURCES}
@@ -263,7 +265,8 @@ set(test_SOURCES
   util/Tuple.ut.cpp
   util/Utility.ut.cpp
   util/VarSub.ut.cpp
-  util/Version.ut.cpp)
+  util/Version.ut.cpp
+  util/Json.ut.cpp)
 
 add_executable(tb-core-test
   ${test_SOURCES}
