@@ -4,24 +4,25 @@
 #include <cstdint>
 #include <string_view>
 
-#define SIMDJSON_DLLIMPORTEXPORT TOOLBOX_API
-
-#define SIMDJSON_IMPLEMENTATION_HASWELL 0
-#define SIMDJSON_IMPLEMENTATION_WESTMERE 0
-#define SIMDJSON_IMPLEMENTATION_FALLBACK 1
-
-#include "../contrib/simdjson/simdjson.h"
+#include "../contrib/json/json.hpp"
 
 namespace toolbox { 
 namespace json {
-    using JsonParser = simdjson::dom::parser;
-    using JsonElement = simdjson::dom::element;
-    using JsonObject = simdjson::dom::object;
-    using JsonString = simdjson::padded_string;
-    using JsonError = simdjson::simdjson_error;
-    using JsonInt = std::int64_t;
-    using JsonUInt = std::uint64_t;
-    using JsonBool = bool;
-    using JsonStringView = std::string_view;
+
+using JsonDocument = nlohmann::json;
+using JsonElement = nlohmann::json;
+using JsonArray = nlohmann::json;
+using JsonInt = std::int64_t;
+using JsonString = std::string;
+using JsonStringView = std::string_view;
+using JsonError = std::out_of_range;
+
+struct JsonParser {
+    template<typename...ArgsT>
+    auto parse(ArgsT...args) {
+        return nlohmann::json::parse(std::forward<ArgsT>(args)...);
+    }
+};
+
 }
 }

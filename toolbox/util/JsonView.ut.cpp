@@ -1,14 +1,14 @@
-#include "Json.hpp"
+#include "JsonView.hpp"
 #include <iostream>
 
 #include <boost/test/unit_test.hpp>
 
 using namespace toolbox;
-using namespace toolbox::json;
+using namespace toolbox::jsonview;
 
-BOOST_AUTO_TEST_SUITE(JsonSuite)
+BOOST_AUTO_TEST_SUITE(JsonViewSuite)
 
-BOOST_AUTO_TEST_CASE(JsonRead)
+BOOST_AUTO_TEST_CASE(JsonViewRead)
 {
     try {
         JsonParser parser;
@@ -16,7 +16,7 @@ BOOST_AUTO_TEST_CASE(JsonRead)
         JsonElement d = parser.parse(json);
         JsonInt n = d["n"];
         BOOST_CHECK_EQUAL(n,1);
-        JsonString s = d["s"];
+        JsonStringView s = d["s"];
         BOOST_CHECK_EQUAL(s,"abc");
         int i = 0;
         for(auto e : d["a"]) {
@@ -30,16 +30,5 @@ BOOST_AUTO_TEST_CASE(JsonRead)
         std::cerr << e.what() << std::endl;
     }
 } 
-BOOST_AUTO_TEST_CASE(JsonWrite)
-{
-    try {
-        JsonElement e;
-        e["n"] = 1;
-        e["s"] = "abc";
-        e["a"] = {1, 2, 3};
-        std::cout << e;
-    }catch(JsonError& e) {
-        std::cerr << e.what() << std::endl;
-    }
-} 
+
 BOOST_AUTO_TEST_SUITE_END()
