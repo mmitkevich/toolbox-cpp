@@ -128,8 +128,8 @@ set(lib_SOURCES
   util/VarSub.cpp
   util/Variant.cpp
   util/Version.cpp
+  util/Pool.cpp
   util/Json.cpp
-  util/JsonView.cpp
   )
 
 if(CURL_FOUND)
@@ -267,8 +267,8 @@ set(test_SOURCES
   util/Utility.ut.cpp
   util/VarSub.ut.cpp
   util/Version.ut.cpp
+  util/Pool.ut.cpp
   util/Json.ut.cpp
-  util/JsonView.ut.cpp
   )
 
 add_executable(tb-core-test
