@@ -32,6 +32,8 @@ using Int = std::int64_t;
 using UInt = std::uint64_t;
 using Bool = bool;
 using StringView = std::string_view;
+using DocumentView = ElementView;
+using ElementType = simdjson::dom::element_type;
 
 struct Key {
     constexpr Key(const char* data, std::size_t size) : data_(data), size_(size) {}
@@ -66,9 +68,9 @@ struct Pretty {
 
 class Element {
 public:
-    using element_type = simdjson::dom::element_type;
+    using element_type = ElementType;
 public:
-    Element(Document* document, element_type element_type=element_type::NULL_VALUE)
+    Element(Document* document=nullptr, element_type element_type=element_type::NULL_VALUE)
     : element_type_(element_type)
     , document_(document)
     {}
@@ -292,7 +294,7 @@ public:
             (*it).key_ = static_cast<std::string_view>(e.first).data();
         }
     }
-    std::ostream& print(std::ostream& os, int pad=0, std::size_t ncols=16) const {
+    std::ostream& print(std::ostream& os, int pad=-1, std::size_t ncols=16) const {
         switch(type()) {
             case element_type::BOOL: return os << (value_.bool_ ? "true":"false");
             case element_type::INT64: return os << value_.int_;
@@ -349,6 +351,7 @@ public:
         return self.print(os);
     }
     constexpr std::string_view key() const { return key_; }
+    void key(std::string_view key) { assert(document_==nullptr); key_ = key.data();}
     
     template<std::size_t I>
     auto get() {
@@ -370,15 +373,18 @@ private:
 private:
     void assert_type(element_type type) {
         if(element_type_!=type) {
+            std::cerr << "expected type "<<(char)type<<" found type "<<(char)element_type_<<std::endl<<std::flush;
             throw Error(simdjson::error_code::INCORRECT_TYPE);
         }
     }
     void assert_is_container() const {
-        if(element_type_!=element_type::ARRAY && element_type_!=element_type::OBJECT)
+        if(element_type_!=element_type::ARRAY && element_type_!=element_type::OBJECT) {
+            std::cerr << "expected array or object type, found type "<<(char)element_type_<<std::endl<<std::flush;
             throw Error(simdjson::error_code::INCORRECT_TYPE);
+        }
     }
     
-    element_type element_type_;
+    element_type element_type_{element_type::NULL_VALUE};
     union {
         std::int64_t int_;
         std::double_t dbl_;
@@ -437,6 +443,9 @@ public:
         strings_ += '\0';
         std::string_view result {strings_.data() + len, str.size()};
         return result;
+    }
+    Document(const Element &rhs) {
+        *static_cast<Element*>(this) = rhs;
     }
 private:
     std::vector<Element> elements_;
@@ -600,6 +609,34 @@ Element& Element::operator=(Element&& rhs) {
     return *this;
 }
 
+template<typename ElementT>
+void copy(ElementT ve, Element& result) {
+    switch(ve.type()) {
+        case ElementType::BOOL: result = Element(ve.get_bool()); break;
+        case ElementType::INT64: result = Element(ve.get_int64()); break;
+        case ElementType::UINT64: result = Element(ve.get_uint64()); break;
+        case ElementType::DOUBLE: result = Element(ve.get_double()); break;
+        case ElementType::NULL_VALUE: result = Element(); break;
+        case ElementType::STRING: result = Element(ve.get_string()); break;
+        case ElementType::OBJECT: {
+            ObjectView vo = ve;
+            for(auto [k, v]: vo) {
+                copy(v, result[k]);
+            }
+            break;
+        }
+        case ElementType::ARRAY: {
+            std::size_t i=0;
+            for(auto v: ve) {
+                copy(v, result[i++]);
+            }
+            break;
+        }
+        default: throw Error(simdjson::error_code::INCORRECT_TYPE);
+    }
+}
+
+using Object = Element;
 }}
 
 namespace std {

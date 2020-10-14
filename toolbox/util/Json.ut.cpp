@@ -2,18 +2,19 @@
 #include <iostream>
 
 #include <boost/test/unit_test.hpp>
+#include <json/simdjson.h>
 
 using namespace toolbox;
 using namespace toolbox::json;
 
 BOOST_AUTO_TEST_SUITE(JsonSuite)
 
-BOOST_AUTO_TEST_CASE(JsonRead)
+BOOST_AUTO_TEST_CASE(JsonParse)
 {
     std::cout <<"\nJsonRead:\n";
     try {
         Parser parser;
-        std::string json = "{\"n\":1, \"s\":\"abc\", \"a\":[1,2,3]}";
+        std::string json = "{\"n\":1, \"s\":\"abc\", \"a\":[1,2,3], \"o\":{\"x\":\"XX\"}}";
         ElementView d = parser.parse(json);
         Int n = d["n"];
         BOOST_CHECK_EQUAL(n,1);
@@ -23,6 +24,13 @@ BOOST_AUTO_TEST_CASE(JsonRead)
         for(auto e : d["a"]) {
             Int x = e;
             BOOST_CHECK_EQUAL(x, ++i);
+        }
+        ObjectView o = d["o"];
+        for(auto [k,v]: o) {
+            std::cout << k <<" = "<<v<<std::endl;
+            BOOST_CHECK_EQUAL(k,"x");
+            std::string_view sv = v;
+            BOOST_CHECK_EQUAL(sv, "XX");
         }
         std::cout << "a=" << d["a"] << std::endl
             << "n=" << d["n"] << std::endl
@@ -75,11 +83,21 @@ BOOST_AUTO_TEST_CASE(JsonTree)
     d["t4"].erase(1);
 
     std::cout<<"enumerate d as key value:\n";
-    for(auto [k, e]: d) {
+    Object o = d;
+    for(auto [k, e]: o) {
         std::cout << std::setw(8)<<k<<"=";
         e.print(std::cout,8)<<std::endl;
     }
     std::cout << "d=\n"<<d << std::endl;
 }
-
+BOOST_AUTO_TEST_CASE(JsonParseTree)
+{
+    std::cout<<"\nJsonParseTree:\n";
+    std::string json = "{\"n\":1,\"s\":\"abc\",\"a\":[1,2,3],\"o\":{\"x\":\"XX\"}}";
+    std::cout<<"original:\n"<<json<<"\nconverted:\n";
+    Parser p;
+    Document d; // Document allocates memory, but does not free it until destructed
+    copy(p.parse(json), d);
+    std::cout << d;
+}
 BOOST_AUTO_TEST_SUITE_END()
