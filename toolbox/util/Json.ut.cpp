@@ -1,8 +1,10 @@
 #include "Json.hpp"
+#include <boost/test/tools/old/interface.hpp>
 #include <iostream>
 
 #include <boost/test/unit_test.hpp>
 #include <json/simdjson.h>
+#include <sstream>
 
 using namespace toolbox;
 using namespace toolbox::json;
@@ -11,11 +13,11 @@ BOOST_AUTO_TEST_SUITE(JsonSuite)
 
 BOOST_AUTO_TEST_CASE(JsonParse)
 {
-    std::cout <<"\nJsonRead:\n";
+    std::cout <<"\nJsonParse:\n";
     try {
         Parser parser;
         std::string json = "{\"n\":1, \"s\":\"abc\", \"a\":[1,2,3], \"o\":{\"x\":\"XX\"}}";
-        ElementView d = parser.parse(json);
+        Element d = parser.parse(json);
         Int n = d["n"];
         BOOST_CHECK_EQUAL(n,1);
         StringView s = d["s"];
@@ -25,7 +27,7 @@ BOOST_AUTO_TEST_CASE(JsonParse)
             Int x = e;
             BOOST_CHECK_EQUAL(x, ++i);
         }
-        ObjectView o = d["o"];
+        Object o = d["o"];
         for(auto [k,v]: o) {
             std::cout << k <<" = "<<v<<std::endl;
             BOOST_CHECK_EQUAL(k,"x");
@@ -40,11 +42,11 @@ BOOST_AUTO_TEST_CASE(JsonParse)
     }
 } 
 
-BOOST_AUTO_TEST_CASE(JsonTree)
+BOOST_AUTO_TEST_CASE(JsonDocument)
 {
-    std::cout<<"\nJsonTree:\n";
+    std::cout<<"\nJsonDocument:\n";
     
-    Document d; // all allocations are in Document
+    MutableDocument d; // all allocations are in Document
     
     // array initialization
     d["ai"] = {"1", 2, true, 3.14, -10};
@@ -58,46 +60,53 @@ BOOST_AUTO_TEST_CASE(JsonTree)
     // complex array initialization
     d["ci"] = { 1, 
                 {2, 3}, 
-                Element {{"key"_jk, "value"}}};
-
+                {{"key"_jk, "value"}}};
+#define T(a,b) a=b; BOOST_CHECK_EQUAL(a, MutableElement(b))
     // mutation
-    d["n"] = 1;
-    d["n"] = 2;
-    d["s"] = "AAA";
-    d["s"] = "AAAA";
-    d["o"]["x"] = "XXX";
-    d["o"]["y"] = "YYY";
-    d["a"][0] = 1;
-    d["a"][1] = 2;
-    d["a"][2] = 3;
+    T(d["n"], 1);
+    T(d["n"], 2);
+    T(d["s"], "AAA");
+    T(d["s"], "AAAA");
+    T(d["o"]["x"], "XXX");
+    T(d["o"]["y"],"YYY");
+    T(d["a"][0], 1);
+    T(d["a"][1], 2);
+    T(d["a"][2], 3);
     std::cout << "d[a]="<<d["a"] <<"\n";
-    d["a"][4] = 5;
+    T(d["a"][4], 5);
     
-    d["t1"] = 1;
+    T(d["t1"], 1);
     d.erase("t1");
     d["t2"] = {0,1,2,3};
+    for(std::size_t i=0;i<=3;i++)
+        BOOST_CHECK_EQUAL(d["t2"][i], MutableElement((int)i));
     d["t2"].erase(1,3);
+    BOOST_CHECK_EQUAL(d["t2"][0], 0);
+    BOOST_CHECK_EQUAL(d["t2"][1], 3);
+    BOOST_CHECK_EQUAL(d["t2"].size(), 2);
     d["t3"] = {0};
     d["t3"].erase(0);
     d["t4"] = {0,1};
     d["t4"].erase(1);
 
     std::cout<<"enumerate d as key value:\n";
-    Object o = d;
-    for(auto [k, e]: o) {
+    for(auto [k, e]: d) {
         std::cout << std::setw(8)<<k<<"=";
         e.print(std::cout,8)<<std::endl;
     }
     std::cout << "d=\n"<<d << std::endl;
 }
-BOOST_AUTO_TEST_CASE(JsonParseTree)
+BOOST_AUTO_TEST_CASE(JsonParseMutable)
 {
-    std::cout<<"\nJsonParseTree:\n";
+    std::cout<<"\nJsonParseMutable:\n";
     std::string json = "{\"n\":1,\"s\":\"abc\",\"a\":[1,2,3],\"o\":{\"x\":\"XX\"}}";
     std::cout<<"original:\n"<<json<<"\nconverted:\n";
     Parser p;
-    Document d; // Document allocates memory, but does not free it until destructed
+    MutableDocument d; // Document allocates memory, but does not free it until destructed
     copy(p.parse(json), d);
     std::cout << d;
+    std::stringstream ss;
+    ss << d;
+    BOOST_CHECK_EQUAL(ss.str(), json);
 }
 BOOST_AUTO_TEST_SUITE_END()

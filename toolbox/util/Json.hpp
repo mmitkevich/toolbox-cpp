@@ -24,15 +24,15 @@ namespace toolbox {
 namespace json {
 
 using Parser = simdjson::dom::parser;
-using ElementView = simdjson::dom::element;
-using ObjectView = simdjson::dom::object;
+using Element = simdjson::dom::element;
+using Object = simdjson::dom::object;
 using String = simdjson::padded_string;
 using Error = simdjson::simdjson_error;
 using Int = std::int64_t;
 using UInt = std::uint64_t;
 using Bool = bool;
 using StringView = std::string_view;
-using DocumentView = ElementView;
+using DocumentView = Element;
 using ElementType = simdjson::dom::element_type;
 
 struct Key {
@@ -55,71 +55,55 @@ namespace literals {
     }
 }
 
-class Document;
+class MutableDocument;
 
-class Element;
+class MutableElement;
 
 struct Pretty {
-    Element &value;    
-    Pretty(Element& value)
+    MutableElement &value;    
+    Pretty(MutableElement& value)
     :value(value) {}
 };
 
 
-class Element {
+class MutableElement {
 public:
     using element_type = ElementType;
 public:
-    Element(Document* document=nullptr, element_type element_type=element_type::NULL_VALUE)
+    MutableElement(MutableDocument* document=nullptr, element_type element_type=element_type::NULL_VALUE)
     : element_type_(element_type)
     , document_(document)
     {}
 public:
 struct const_iterator {
-        explicit const_iterator(const Element*e)
+        explicit const_iterator(const MutableElement*e)
         :e(e) {}
         const_iterator operator++() {
             auto result =  const_iterator(e);
             e = e->next_;
             return result;
         }
-        const_iterator operator++(int) {
-            e = e->next_;
-            return *this;
-        }
-        const Element& operator*() {
-            return *e;
-        }
-        const Element* operator->() {
-            return e;
-        }
-        bool operator!=(const_iterator rhs) {
-            return e != rhs.e;
-        }
-        const Element* e;
+        const_iterator operator++(int) { e = e->next_; return *this; }
+        const MutableElement& operator*() { return *e; }
+        const MutableElement* operator->() { return e; }
+        bool operator==(const_iterator rhs) { return e==rhs.e;}
+        bool operator!=(const_iterator rhs) { return e != rhs.e; }
+        const MutableElement* e;
     };
     struct iterator {
-        explicit iterator(Element*e)
+        explicit iterator(MutableElement*e)
         :e(e) {}
         iterator operator++() {
             auto result =  iterator(e);
             e = e->next_;
             return result;
         }
-        iterator operator++(int) {
-            e = e->next_;
-            return *this;
-        }
-        Element& operator*() {
-            return *e;
-        }
-        Element* operator->() {
-            return e;
-        }
-        bool operator!=(iterator rhs) {
-            return e != rhs.e;
-        }
-        Element* e;
+        iterator operator++(int) { e = e->next_; return *this; }
+        MutableElement& operator*() { return *e; }
+        MutableElement* operator->() { return e; }
+        bool operator==(iterator rhs) { return e==rhs.e;}
+        bool operator!=(iterator rhs) { return e != rhs.e; }
+        MutableElement* e;
     };
 public:
     element_type type() const noexcept {
@@ -128,7 +112,7 @@ public:
     bool is_array() const noexcept { return element_type_ == element_type::ARRAY; }
     bool is_object() const noexcept { return element_type_ == element_type::OBJECT; }
     bool is_string() const noexcept { return element_type_ == element_type::STRING; }
-    std::string_view get_string() {
+    std::string_view get_string() const {
         assert_type(element_type::STRING);
         return std::string_view(value_.str_, size_);
     }
@@ -153,12 +137,48 @@ public:
         return value_.bool_;
     }        
     bool is_null() const noexcept { return element_type_ == element_type::NULL_VALUE; }
-    Element& operator[](std::string_view key);
-    Element& operator[](std::size_t index);
+    MutableElement& at(std::string_view key);
+    MutableElement& at(std::size_t index);
+    template<typename KeyT>
+    MutableElement& operator[](KeyT key) { return at(key); }
+    template<typename KeyT>
+    const MutableElement& operator[](KeyT key) const { return const_cast<MutableElement*>(this)->at(key); }
     
+    bool operator==(const MutableElement & rhs) const {
+        if(type() != rhs.type())
+            return false;
+        switch(type()) {
+            case ElementType::BOOL: case ElementType::DOUBLE: case ElementType::INT64: case ElementType::UINT64: return value_.int_ == rhs.value_.int_;
+            case ElementType::NULL_VALUE: return rhs.is_null();
+            case ElementType::STRING: return get_string() == rhs.get_string();
+            case ElementType::ARRAY: {
+                if(size()!=rhs.size())
+                    return false;
+                std::size_t i=0;
+                for(auto e: *this) {
+                    if(e!=rhs[i++])
+                        return false;
+                }
+                return true;
+            }
+            case ElementType::OBJECT: {
+                if(size()!=rhs.size())
+                    return false;
+                for(auto e: *this) {
+                    if(rhs.find(e.key()) == iterator(nullptr) || e!=rhs[e.key()])
+                        return false;
+                }
+                return true;                
+            }
+        }
+        return false;
+    }
+    bool operator!=(const MutableElement & rhs) const {
+        return !operator==(rhs);
+    }
     void clear();
-    iterator find(std::string_view key);
-    iterator find(std::size_t key);
+    iterator find(std::string_view key) const;
+    iterator find(std::size_t key) const;
     iterator erase(iterator it);
     iterator erase(std::string_view key) {
         return erase(find(key));
@@ -174,9 +194,9 @@ public:
         }
         return it;
     }
-    iterator insert_back(const Element &e);
-    iterator insert_after(iterator it, const Element &e);
-    Element& back();
+    iterator insert_back(const MutableElement &e);
+    iterator insert_after(iterator it, const MutableElement &e);
+    MutableElement& back();
 
     std::size_t size() const { 
         switch(element_type_) {
@@ -207,77 +227,78 @@ public:
         assert_is_container();
         return iterator(nullptr);
     }
-    operator std::pair<const char*, const Element&>() const {
+    operator std::pair<const char*, const MutableElement&>() const {
         return std::make_pair(key_,*this);
     }
 
-    Element(const Element& rhs) {
+    MutableElement(const MutableElement& rhs) {
         *this = rhs;
     }
 
-    Element& operator=(Element&& rhs);
+    MutableElement& operator=(MutableElement&& rhs);
 
-    Element(long long val) {
+    MutableElement(long long val) {
         element_type_ = element_type::INT64;
         value_.int_ = val;
     }
-    Element(unsigned long long val) {
+    MutableElement(unsigned long long val) {
         element_type_ = element_type::UINT64;
         value_.int_ = val;
     }
-    Element(long int val) {
+    MutableElement(long val) {
         element_type_ = element_type::INT64;
         value_.int_ = val;
     } 
-    Element(unsigned long int val) {
+    MutableElement(unsigned long val) {
         element_type_ = element_type::UINT64;
         value_.int_ = val;
     }
-    Element(int val) {
+
+    MutableElement(int val) {
         element_type_ = element_type::INT64;
         value_.int_ = val;
     } 
-    Element(unsigned int val) {
+    MutableElement(unsigned int val) {
         element_type_ = element_type::UINT64;
         value_.int_ = val;
     }  
-    Element(short val) {
+    MutableElement(short val) {
         element_type_ = element_type::INT64;
         value_.int_ = val;
     } 
-    Element(unsigned short val) {
+    MutableElement(unsigned short val) {
         element_type_ = element_type::UINT64;
         value_.int_ = val;
     }  
-    Element(char val) {
+    MutableElement(char val) {
         element_type_ = element_type::INT64;
         value_.int_ = val;
     } 
-    Element(unsigned char val) {
+    MutableElement(unsigned char val) {
         element_type_ = element_type::UINT64;
         value_.int_ = val;
     }  
-    Element(double val) {
+    MutableElement(double val) {
         element_type_ = element_type::DOUBLE;
         value_.dbl_ = val;
     }  
-    Element(float val) {
+    MutableElement(float val) {
         element_type_ = element_type::DOUBLE;
         value_.dbl_ = val;
     }
-    Element(bool val) {
+    MutableElement(bool val) {
         element_type_ = element_type::BOOL;
         value_.bool_ = val;
     }
 
-    Element(std::string_view val);
+    MutableElement(std::string_view val);
 
-    Element(const char* val) : Element(std::string_view(val)) {}
+    MutableElement(const char* val) : MutableElement(std::string_view(val)) {}
 
-    Element(std::string val) : Element(std::string_view(val)) {}
+    MutableElement(std::string val) : MutableElement(std::string_view(val)) {}
 
     // array
-    Element(std::initializer_list<Element> lst) {
+    MutableElement(std::initializer_list<MutableElement> lst) {
         element_type_ = element_type::ARRAY;
         iterator it(&back());
 
@@ -286,7 +307,7 @@ public:
         }
     }
     
-    Element(std::initializer_list<std::pair<Key, Element>> lst) {
+    MutableElement(std::initializer_list<std::pair<Key, MutableElement>> lst) {
         element_type_ = element_type::OBJECT;
         iterator it(&back());
         for(auto &e : lst) {
@@ -347,7 +368,7 @@ public:
         return os;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const Element& self) {
+    friend std::ostream& operator<<(std::ostream& os, const MutableElement& self) {
         return self.print(os);
     }
     constexpr std::string_view key() const { return key_; }
@@ -362,7 +383,7 @@ public:
     template<typename T>
     T get();
 private:
-    Element& operator=(const Element& rhs) {
+    MutableElement& operator=(const MutableElement& rhs) {
         element_type_ = rhs.element_type_;
         value_ = rhs.value_;
         next_ = rhs.next_;
@@ -371,7 +392,7 @@ private:
         return *this;
     }
 private:
-    void assert_type(element_type type) {
+    void assert_type(element_type type) const {
         if(element_type_!=type) {
             std::cerr << "expected type "<<(char)type<<" found type "<<(char)element_type_<<std::endl<<std::flush;
             throw Error(simdjson::error_code::INCORRECT_TYPE);
@@ -390,45 +411,45 @@ private:
         std::double_t dbl_;
         bool bool_;
         const char* str_;
-        Element *child_ = nullptr; // first child
+        MutableElement *child_ = nullptr; // first child
     } value_;
     // next element in the array
-    Element *next_ = nullptr;
+    MutableElement *next_ = nullptr;
     const char* key_ = nullptr;
     std::size_t size_ = 0;
-    Document *document_ = nullptr;
-    friend class Document;
+    MutableDocument *document_ = nullptr;
+    friend class MutableDocument;
 };
 
 template<>
-std::string_view Element::get() {
+std::string_view MutableElement::get() {
     return get_string();
 }
 template<>
-std::uint64_t Element::get() {
+std::uint64_t MutableElement::get() {
     return get_uint64();
 }
 template<>
-std::int64_t Element::get() {
+std::int64_t MutableElement::get() {
     return get_int64();
 }
 template<>
-bool Element::get() {
+bool MutableElement::get() {
     return get_bool();
 }
 
-/// Usecase: create Document, fill with some config, pass to somecode as const, drop alltogether.
-class Document: public Element {
+/// Usecase: create MutableDocument, fill with some config, pass to somecode as const, drop alltogether.
+class MutableDocument: public MutableElement {
 public:
-    Document(element_type element_type=element_type::NULL_VALUE, std::size_t elements_capacity=256, std::size_t strings_capacity=4096)
-    : Element(this, element_type) {
+    MutableDocument(element_type element_type=element_type::NULL_VALUE, std::size_t elements_capacity=256, std::size_t strings_capacity=4096)
+    : MutableElement(this, element_type) {
         elements_.reserve(elements_capacity);
         strings_.reserve(strings_capacity);
     }
-    Element* alloc_element(Element::element_type type) {
+    MutableElement* alloc_element(MutableElement::element_type type) {
         assert(this);
         elements_.emplace_back(this, type);
-        Element& result = elements_.back();
+        MutableElement& result = elements_.back();
         return &result;
     }
     std::string_view alloc_string(std::string_view str) {
@@ -444,21 +465,21 @@ public:
         std::string_view result {strings_.data() + len, str.size()};
         return result;
     }
-    Document(const Element &rhs) {
-        *static_cast<Element*>(this) = rhs;
+    MutableDocument(const MutableElement &rhs) {
+        *static_cast<MutableElement*>(this) = rhs;
     }
 private:
-    std::vector<Element> elements_;
+    std::vector<MutableElement> elements_;
     std::string strings_;
 };
 
-inline Element& Element::operator[](std::string_view key)
+inline MutableElement& MutableElement::at(std::string_view key)
 {
     //if(element_type_!=element_type::OBJECT && element_type_!=element_type::NULL_VALUE)
     //    throw Error(simdjson::error_code::INCORRECT_TYPE);
     element_type_ = element_type::OBJECT;
-    Element* e = value_.child_;
-    Element* tail = e;
+    MutableElement* e = value_.child_;
+    MutableElement* tail = e;
     while(e!=nullptr) {
         if(e->key() == key)
             return *e;
@@ -476,15 +497,15 @@ inline Element& Element::operator[](std::string_view key)
     }
     return *e;
 }
-inline Element& Element::operator[](std::size_t index)
+inline MutableElement& MutableElement::at(std::size_t index)
 {
     if(element_type_!=element_type::ARRAY && element_type_!=element_type::NULL_VALUE)
         throw Error(simdjson::error_code::INCORRECT_TYPE);
     element_type_ = element_type::ARRAY;
 
-    Element* e = value_.child_;
+    MutableElement* e = value_.child_;
     std::size_t i = 0;
-    Element* tail = e;
+    MutableElement* tail = e;
     while(e!=nullptr) {
         if(i==index)
             return *e;
@@ -506,21 +527,21 @@ inline Element& Element::operator[](std::size_t index)
     }
     return *e;
 }
-Element& Element::back() {
-    Element* tail = value_.child_;
+MutableElement& MutableElement::back() {
+    MutableElement* tail = value_.child_;
     while(tail!=nullptr && tail->next_!=nullptr) {
         tail = tail->next_;
     }
     return *tail;
 }
 
-Element::iterator Element::insert_after(iterator it, const Element &val) {
-    Element *e = const_cast<Element*>(&val);
+MutableElement::iterator MutableElement::insert_after(iterator it, const MutableElement &val) {
+    MutableElement *e = const_cast<MutableElement*>(&val);
     if(document_!=nullptr) {
         e = document_->alloc_element(element_type::NULL_VALUE);
         *e = val;
     }
-    Element *prev = &(*it);
+    MutableElement *prev = &(*it);
     if(prev==nullptr) {
         // replace head
         value_.child_ = e;
@@ -532,30 +553,32 @@ Element::iterator Element::insert_after(iterator it, const Element &val) {
     size_++;
     return iterator(e);
 }
-Element::iterator Element::find(std::string_view key) {
+MutableElement::iterator MutableElement::find(std::string_view key) const {
     assert_type(element_type::OBJECT);
-    for(iterator it=begin(); it!=end(); it++)
+    iterator end(nullptr);
+    for(iterator it(value_.child_); it!=end; it++)
         if(it->key() == key)
             return it;
-    return end();
+    return iterator(nullptr);
 }
 
-Element::iterator Element::find(std::size_t index) {
+MutableElement::iterator MutableElement::find(std::size_t index) const {
     assert_type(element_type::ARRAY);
+    iterator end(nullptr);
     if(index>=size())
-        return end();
+        return end;
     std::size_t i = 0;
-    for(iterator it=begin(); it!=end(); it++)
+    for(iterator it(value_.child_); it!=end; it++)
         if(i++ == index)
             return it;
-    return end();
+    return iterator(nullptr);
 }
-void Element::clear() {
+void MutableElement::clear() {
     size_ = 0;
     value_.child_ = nullptr;    // also changes string to null if any
 }
-Element::iterator Element::erase(iterator it) {
-    Element *e = value_.child_;
+MutableElement::iterator MutableElement::erase(iterator it) {
+    MutableElement *e = value_.child_;
     if(it.e==nullptr)
         return iterator(nullptr);
     if(it.e==e) {
@@ -573,16 +596,16 @@ Element::iterator Element::erase(iterator it) {
     }
     return iterator(nullptr);
 }
-Element::iterator Element::insert_back(const Element& val) {
+MutableElement::iterator MutableElement::insert_back(const MutableElement& val) {
     return insert_after(iterator(&back()), val);
 }
-Element::Element(std::string_view val) {
+MutableElement::MutableElement(std::string_view val) {
     element_type_ = element_type::STRING;
     value_.str_ = val.data();
     size_ = val.size();
     // document_==nullptr it means that string is not yet copied into document
 }
-Element& Element::operator=(Element&& rhs) {
+MutableElement& MutableElement::operator=(MutableElement&& rhs) {
     assert(this!=&rhs);
     if(rhs.document_!=nullptr && document_!=rhs.document_)
         throw Error(simdjson::error_code::INDEX_OUT_OF_BOUNDS);
@@ -599,7 +622,7 @@ Element& Element::operator=(Element&& rhs) {
         // we drop old childs if any
         value_.child_ = nullptr;
         size_ = 0;
-        Element* e = rhs.value_.child_;
+        MutableElement* e = rhs.value_.child_;
         iterator it(&back());
         while(e!=nullptr) {
             it = insert_after(it, *e);
@@ -610,16 +633,16 @@ Element& Element::operator=(Element&& rhs) {
 }
 
 template<typename ElementT>
-void copy(ElementT ve, Element& result) {
+void copy(ElementT ve, MutableElement& result) {
     switch(ve.type()) {
-        case ElementType::BOOL: result = Element(ve.get_bool()); break;
-        case ElementType::INT64: result = Element(ve.get_int64()); break;
-        case ElementType::UINT64: result = Element(ve.get_uint64()); break;
-        case ElementType::DOUBLE: result = Element(ve.get_double()); break;
-        case ElementType::NULL_VALUE: result = Element(); break;
-        case ElementType::STRING: result = Element(ve.get_string()); break;
+        case ElementType::BOOL: result = MutableElement(ve.get_bool()); break;
+        case ElementType::INT64: result = MutableElement(ve.get_int64()); break;
+        case ElementType::UINT64: result = MutableElement(ve.get_uint64()); break;
+        case ElementType::DOUBLE: result = MutableElement(ve.get_double()); break;
+        case ElementType::NULL_VALUE: result = MutableElement(); break;
+        case ElementType::STRING: result = MutableElement(ve.get_string()); break;
         case ElementType::OBJECT: {
-            ObjectView vo = ve;
+            Object vo = ve;
             for(auto [k, v]: vo) {
                 copy(v, result[k]);
             }
@@ -636,11 +659,16 @@ void copy(ElementT ve, Element& result) {
     }
 }
 
-using Object = Element;
+inline std::ostream& operator<<(std::ostream& os, Pretty pretty) {
+    return pretty.value.print(os, 0);
+}
+
+using MutableObject = MutableElement;
+
 }}
 
 namespace std {
-template<> struct tuple_size<toolbox::json::Element> : std::integral_constant<size_t, 2> { };
-template<> struct tuple_element<0,toolbox::json::Element> { using type = std::string_view; };
-template<> struct tuple_element<1,toolbox::json::Element> { using type = const toolbox::json::Element&; };
+template<> struct tuple_size<toolbox::json::MutableElement> : std::integral_constant<size_t, 2> { };
+template<> struct tuple_element<0,toolbox::json::MutableElement> { using type = std::string_view; };
+template<> struct tuple_element<1,toolbox::json::MutableElement> { using type = const toolbox::json::MutableElement&; };
 }
