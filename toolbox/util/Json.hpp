@@ -422,19 +422,19 @@ private:
 };
 
 template<>
-std::string_view MutableElement::get() {
+inline std::string_view MutableElement::get() {
     return get_string();
 }
 template<>
-std::uint64_t MutableElement::get() {
+inline std::uint64_t MutableElement::get() {
     return get_uint64();
 }
 template<>
-std::int64_t MutableElement::get() {
+inline std::int64_t MutableElement::get() {
     return get_int64();
 }
 template<>
-bool MutableElement::get() {
+inline bool MutableElement::get() {
     return get_bool();
 }
 
@@ -527,7 +527,7 @@ inline MutableElement& MutableElement::at(std::size_t index)
     }
     return *e;
 }
-MutableElement& MutableElement::back() {
+inline MutableElement& MutableElement::back() {
     MutableElement* tail = value_.child_;
     while(tail!=nullptr && tail->next_!=nullptr) {
         tail = tail->next_;
@@ -535,7 +535,7 @@ MutableElement& MutableElement::back() {
     return *tail;
 }
 
-MutableElement::iterator MutableElement::insert_after(iterator it, const MutableElement &val) {
+inline MutableElement::iterator MutableElement::insert_after(iterator it, const MutableElement &val) {
     MutableElement *e = const_cast<MutableElement*>(&val);
     if(document_!=nullptr) {
         e = document_->alloc_element(element_type::NULL_VALUE);
@@ -553,7 +553,7 @@ MutableElement::iterator MutableElement::insert_after(iterator it, const Mutable
     size_++;
     return iterator(e);
 }
-MutableElement::iterator MutableElement::find(std::string_view key) const {
+inline MutableElement::iterator MutableElement::find(std::string_view key) const {
     assert_type(element_type::OBJECT);
     iterator end(nullptr);
     for(iterator it(value_.child_); it!=end; it++)
@@ -562,7 +562,7 @@ MutableElement::iterator MutableElement::find(std::string_view key) const {
     return iterator(nullptr);
 }
 
-MutableElement::iterator MutableElement::find(std::size_t index) const {
+inline MutableElement::iterator MutableElement::find(std::size_t index) const {
     assert_type(element_type::ARRAY);
     iterator end(nullptr);
     if(index>=size())
@@ -573,11 +573,11 @@ MutableElement::iterator MutableElement::find(std::size_t index) const {
             return it;
     return iterator(nullptr);
 }
-void MutableElement::clear() {
+inline void MutableElement::clear() {
     size_ = 0;
     value_.child_ = nullptr;    // also changes string to null if any
 }
-MutableElement::iterator MutableElement::erase(iterator it) {
+inline MutableElement::iterator MutableElement::erase(iterator it) {
     MutableElement *e = value_.child_;
     if(it.e==nullptr)
         return iterator(nullptr);
@@ -596,16 +596,16 @@ MutableElement::iterator MutableElement::erase(iterator it) {
     }
     return iterator(nullptr);
 }
-MutableElement::iterator MutableElement::insert_back(const MutableElement& val) {
+inline MutableElement::iterator MutableElement::insert_back(const MutableElement& val) {
     return insert_after(iterator(&back()), val);
 }
-MutableElement::MutableElement(std::string_view val) {
+inline MutableElement::MutableElement(std::string_view val) {
     element_type_ = element_type::STRING;
     value_.str_ = val.data();
     size_ = val.size();
     // document_==nullptr it means that string is not yet copied into document
 }
-MutableElement& MutableElement::operator=(MutableElement&& rhs) {
+inline MutableElement& MutableElement::operator=(MutableElement&& rhs) {
     assert(this!=&rhs);
     if(rhs.document_!=nullptr && document_!=rhs.document_)
         throw Error(simdjson::error_code::INDEX_OUT_OF_BOUNDS);
