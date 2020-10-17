@@ -1,12 +1,18 @@
 #pragma once
 
 #include "toolbox/util/Config.hpp"
+#include "toolbox/util/RobinHood.hpp"
+#include "toolbox/util/InternedStrings.hpp"
+
 #include <cmath>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <ostream>
 #include <initializer_list>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <ostream>
@@ -65,6 +71,10 @@ struct Pretty {
     :value(value) {}
 };
 
+class JsonError : public std::runtime_error {
+public:
+    JsonError(std::string what) : std::runtime_error(what) {}
+};
 
 class MutableElement {
 public:
@@ -75,7 +85,7 @@ public:
     , document_(document)
     {}
 public:
-struct const_iterator {
+    struct const_iterator {
         explicit const_iterator(const MutableElement*e)
         :e(e) {}
         const_iterator operator++() {
@@ -137,6 +147,22 @@ public:
         return value_.bool_;
     }        
     bool is_null() const noexcept { return element_type_ == element_type::NULL_VALUE; }
+
+    std::string to_string() {
+        switch(element_type_) {
+            case element_type::STRING:
+                return std::string(value_.str_, size_);
+            case element_type::INT64: 
+                return std::to_string(value_.int_);
+            case element_type::UINT64: 
+                return std::to_string((std::uint64_t)value_.int_);
+            case element_type::BOOL:
+                return std::to_string(value_.bool_);
+            default:
+                return "";
+        }
+    }
+
     MutableElement& at(std::string_view key);
     MutableElement& at(std::size_t index);
     template<typename KeyT>
@@ -150,7 +176,11 @@ public:
         switch(type()) {
             case ElementType::BOOL: case ElementType::DOUBLE: case ElementType::INT64: case ElementType::UINT64: return value_.int_ == rhs.value_.int_;
             case ElementType::NULL_VALUE: return rhs.is_null();
-            case ElementType::STRING: return get_string() == rhs.get_string();
+            case ElementType::STRING:  {
+                auto this_str = get_string();
+                auto rhs_str = rhs.get_string();
+                return this_str == rhs_str;
+            }
             case ElementType::ARRAY: {
                 if(size()!=rhs.size())
                     return false;
@@ -179,6 +209,17 @@ public:
     void clear();
     iterator find(std::string_view key) const;
     iterator find(std::size_t key) const;
+    template<typename T>
+    const_iterator find_value(const T& val) const {
+        MutableElement needle(val);
+        if(element_type_==element_type::ARRAY) {
+            for(auto &e: *this) {
+                if(e==needle)
+                    return const_iterator(&e);
+            }
+        }
+        return const_iterator(nullptr);
+    }
     iterator erase(iterator it);
     iterator erase(std::string_view key) {
         return erase(find(key));
@@ -197,6 +238,16 @@ public:
     iterator insert_back(const MutableElement &e);
     iterator insert_after(iterator it, const MutableElement &e);
     MutableElement& back();
+    void push_back(const MutableElement &e) {
+        if(is_array())
+            insert_back(e);
+        else {
+            // FIXME:HACK: if someone does push_back, we drop old value and we're array now
+            element_type_ = element_type::ARRAY;
+            value_.child_ = nullptr;
+            insert_back(e);
+        }
+    }
 
     std::size_t size() const { 
         switch(element_type_) {
@@ -210,21 +261,41 @@ public:
         }
         return size_; 
     }
+
+    template<typename T>
+    bool copy(std::vector<T> &result) const {
+        if(element_type_!=element_type::ARRAY)
+            return false;
+        for(auto e: *this) {
+            result.push_back(e.get<T>());
+        }
+        return true;
+    }
+
+    template<typename MapT>
+    bool copy(MapT &result) const {
+        if(element_type_!=element_type::OBJECT)
+            return false;
+        for(auto [k, v]: *this) {
+            result[k] = v;
+        }
+        return true;
+    }
     
     const_iterator begin() const {
-        assert_is_container();
+        if(!is_array() && !is_object())
+            return const_iterator(nullptr);
         return const_iterator(value_.child_);
     }
     const_iterator end() const {
-        assert_is_container();
         return const_iterator(nullptr);
     }
     iterator begin() {
-        assert_is_container();
+        if(!is_array() && !is_object())
+            return iterator(nullptr);
         return iterator(value_.child_);
     }
     iterator end() {
-        assert_is_container();
         return iterator(nullptr);
     }
     operator std::pair<const char*, const MutableElement&>() const {
@@ -380,8 +451,42 @@ public:
         else if constexpr(I == 1) return *this;
     }
 
+    /// conversion via string serialization
     template<typename T>
-    T get();
+    T get() {
+        return TypeTraits<T>::from_string(to_string());
+    }
+    
+    template<typename T>
+    T value_or(std::string_view key, T dflt) const {
+        switch(element_type_)
+        {
+            case ElementType::OBJECT: {
+                auto it = find(key);
+                return it==iterator(nullptr) ? dflt : it->get<T>();
+            }
+            case ElementType::ARRAY: {
+                int index = std::atoi(key.data());
+                auto it = find(index);
+                return it==iterator(nullptr) ? dflt : it->get<T>();
+            }
+            case ElementType::NULL_VALUE: return dflt;
+            default:
+                return dflt;
+        }
+    }
+
+    template<typename T>
+    T value(std::string_view key) const noexcept(false) {
+        auto it = find(key);
+        if(it==iterator(nullptr)) {
+            std::stringstream ss;
+            ss << "'"<<key<<"' not found";
+            throw JsonError(ss.str());
+        }
+        return it->get<T>();
+    }
+
 private:
     MutableElement& operator=(const MutableElement& rhs) {
         element_type_ = rhs.element_type_;
@@ -394,14 +499,16 @@ private:
 private:
     void assert_type(element_type type) const {
         if(element_type_!=type) {
-            std::cerr << "expected type "<<(char)type<<" found type "<<(char)element_type_<<std::endl<<std::flush;
-            throw Error(simdjson::error_code::INCORRECT_TYPE);
+            std::stringstream ss;
+            ss<<"'"<<key()<<"': found "<<element_type_<<" expected "<<type;
+            throw JsonError(ss.str());
         }
     }
     void assert_is_container() const {
         if(element_type_!=element_type::ARRAY && element_type_!=element_type::OBJECT) {
-            std::cerr << "expected array or object type, found type "<<(char)element_type_<<std::endl<<std::flush;
-            throw Error(simdjson::error_code::INCORRECT_TYPE);
+            std::stringstream ss;
+            ss<<"'"<<key()<<"': found "<<element_type_<<" expected "<<element_type::ARRAY<<","<<element_type::OBJECT;
+            throw JsonError(ss.str());
         }
     }
     
@@ -424,6 +531,10 @@ private:
 template<>
 inline std::string_view MutableElement::get() {
     return get_string();
+}
+template<>
+inline std::string MutableElement::get() {
+    return std::string(get_string());
 }
 template<>
 inline std::uint64_t MutableElement::get() {
@@ -453,24 +564,14 @@ public:
         return &result;
     }
     std::string_view alloc_string(std::string_view str) {
-        assert(this);
-        //std::cout << strings_<<"|"<<str<<std::endl;
-        std::size_t pos = strings_.find(str.data(), 0, str.size()+1);
-        if(pos!=std::string::npos) {
-            return std::string_view(strings_.data()+pos, str.size());
-        }
-        std::size_t len = strings_.size();
-        strings_ += str; 
-        strings_ += '\0';
-        std::string_view result {strings_.data() + len, str.size()};
-        return result;
+        return strings_.intern(str);
     }
     MutableDocument(const MutableElement &rhs) {
         *static_cast<MutableElement*>(this) = rhs;
     }
 private:
     std::vector<MutableElement> elements_;
-    std::string strings_;
+    toolbox::util::InternedStrings strings_;
 };
 
 inline MutableElement& MutableElement::at(std::string_view key)
@@ -500,7 +601,8 @@ inline MutableElement& MutableElement::at(std::string_view key)
 inline MutableElement& MutableElement::at(std::size_t index)
 {
     if(element_type_!=element_type::ARRAY && element_type_!=element_type::NULL_VALUE)
-        throw Error(simdjson::error_code::INCORRECT_TYPE);
+        throw JsonError("array type expected");
+
     element_type_ = element_type::ARRAY;
 
     MutableElement* e = value_.child_;
@@ -540,6 +642,9 @@ inline MutableElement::iterator MutableElement::insert_after(iterator it, const 
     if(document_!=nullptr) {
         e = document_->alloc_element(element_type::NULL_VALUE);
         *e = val;
+        if(e->element_type_==element_type::STRING) {
+            e->value_.str_ = document_->alloc_string({e->value_.str_, e->size_}).data();
+        }
     }
     MutableElement *prev = &(*it);
     if(prev==nullptr) {
@@ -607,9 +712,7 @@ inline MutableElement::MutableElement(std::string_view val) {
 }
 inline MutableElement& MutableElement::operator=(MutableElement&& rhs) {
     assert(this!=&rhs);
-    if(rhs.document_!=nullptr && document_!=rhs.document_)
-        throw Error(simdjson::error_code::INDEX_OUT_OF_BOUNDS);
-    
+    assert(rhs.document_==nullptr || document_==rhs.document_);
     element_type_ = rhs.element_type_;
     size_ = rhs.size_;
     value_ = rhs.value_;
@@ -633,7 +736,16 @@ inline MutableElement& MutableElement::operator=(MutableElement&& rhs) {
 }
 
 template<typename ElementT>
-void copy(ElementT ve, MutableElement& result) {
+inline auto to_object(ElementT &e) {
+    if constexpr(std::is_same_v<ElementT, simdjson::dom::element>) {
+        return simdjson::dom::object(e);
+    } else {
+        return e;
+    }
+}
+
+template<typename ElementT>
+inline void copy(ElementT ve, MutableElement& result) {
     switch(ve.type()) {
         case ElementType::BOOL: result = MutableElement(ve.get_bool()); break;
         case ElementType::INT64: result = MutableElement(ve.get_int64()); break;
@@ -642,8 +754,7 @@ void copy(ElementT ve, MutableElement& result) {
         case ElementType::NULL_VALUE: result = MutableElement(); break;
         case ElementType::STRING: result = MutableElement(ve.get_string()); break;
         case ElementType::OBJECT: {
-            Object vo = ve;
-            for(auto [k, v]: vo) {
+            for(auto [k, v]: to_object(ve)) {
                 copy(v, result[k]);
             }
             break;

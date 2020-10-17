@@ -103,7 +103,8 @@ BOOST_AUTO_TEST_CASE(JsonParseMutable)
     std::cout<<"original:\n"<<json<<"\nconverted:\n";
     Parser p;
     MutableDocument d; // Document allocates memory, but does not free it until destructed
-    copy(p.parse(json), d);
+    simdjson::dom::element pj = p.parse(json);
+    copy(pj, d);
     std::cout << d;
     std::stringstream ss;
     ss << d;
