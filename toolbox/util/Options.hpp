@@ -25,6 +25,7 @@
 ///
 /// \author Rodrigo Fernandes
 
+#include <initializer_list>
 #include <toolbox/util/RefCount.hpp>
 #include <toolbox/util/String.hpp>
 
@@ -73,6 +74,24 @@ class Value : public Presence<Value> {
     template <typename VarT, typename AllocT>
     explicit Value(std::vector<VarT, AllocT>& var)
     : func_{[&var](std::string_view arg) { var.push_back(from_string<VarT>(arg)); }}
+    {
+    }
+
+    // this uses dummy argument to deduce type
+    template <typename VarT, typename ValueT>
+    explicit Value(VarT &var, ValueT dummyType)
+    : func_{[&var](std::string_view arg) { 
+        var = from_string<ValueT>(arg); 
+      }}
+    {
+    }
+
+    // this uses dummy argument to deduce type, and does push_back
+    template <typename VarT, typename ValueT>
+    explicit Value(VarT &var, std::vector<ValueT> dummyType)
+    : func_{[&var](std::string_view arg) { 
+        var.push_back(from_string<ValueT>(arg));
+    }}
     {
     }
 
