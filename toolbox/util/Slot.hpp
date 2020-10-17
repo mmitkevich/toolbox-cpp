@@ -13,9 +13,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#pragma once
 
 #ifndef TOOLBOX_UTIL_SLOT_HPP
 #define TOOLBOX_UTIL_SLOT_HPP
+
+#include <toolbox/Config.h>
 
 #include <boost/container/small_vector.hpp>
 #include <toolbox/util/Traits.hpp>
@@ -48,8 +51,8 @@ class BasicSlot {
     constexpr BasicSlot(BasicSlot&&) noexcept = default;
     constexpr BasicSlot& operator=(BasicSlot&&) noexcept = default;
 
-    void invoke(ArgsT... args) const { fn_(obj_, std::forward<ArgsT>(args)...); }
-    void operator()(ArgsT... args) const { fn_(obj_, std::forward<ArgsT>(args)...); }
+    TOOLBOX_ALWAYS_INLINE void invoke(ArgsT... args) const { fn_(obj_, std::forward<ArgsT>(args)...); }
+    TOOLBOX_ALWAYS_INLINE void operator()(ArgsT... args) const { fn_(obj_, std::forward<ArgsT>(args)...); }
     constexpr bool empty() const noexcept { return fn_ == nullptr; }
     constexpr explicit operator bool() const noexcept { return fn_ != nullptr; }
 
@@ -161,12 +164,12 @@ public:
     void disconnect_all() {
         slots_.clear();
     }
-    void invoke(ArgsT... args) const { 
+    TOOLBOX_ALWAYS_INLINE void invoke(ArgsT... args) const { 
         for(auto& slot: slots_) {
             slot(std::forward<ArgsT>(args)...);
         }
     }
-    void operator()(ArgsT... args) const { 
+    TOOLBOX_ALWAYS_INLINE void operator()(ArgsT... args) const { 
         for(auto& slot: slots_) {
             slot(std::forward<ArgsT>(args)...);
         }
