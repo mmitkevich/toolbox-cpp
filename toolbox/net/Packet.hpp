@@ -1,6 +1,7 @@
 #pragma once
-
+#include "toolbox/Config.h"
 #include "toolbox/net/Endpoint.hpp"
+#include "toolbox/sys/Time.hpp"
 
 namespace toolbox { inline namespace net {
 
@@ -38,15 +39,16 @@ public:
     using BinaryPacket = BinaryPacketT;
     using value_type = T;
 public:
-    TypedPacket(BinaryPacketT& impl)
+    TOOLBOX_ALWAYS_INLINE TypedPacket(BinaryPacketT& impl)
     : impl_(impl){}
 
-    T* data() { return (T*)impl_.data(); }
-    const T* data() const { return (T*)impl_.data(); }
-    std::size_t size() const { return impl_.size()/sizeof(T); }
+    TOOLBOX_ALWAYS_INLINE WallTime recv_timestamp() const { return impl_.recv_timestamp(); }
+    TOOLBOX_ALWAYS_INLINE T* data() { return (T*)impl_.data(); }
+    TOOLBOX_ALWAYS_INLINE const T* data() const { return (T*)impl_.data(); }
+    TOOLBOX_ALWAYS_INLINE std::size_t size() const { return impl_.size()/sizeof(T); }
 
-    Endpoint src() const { return impl_.src(); }
-    Endpoint dst() const { return impl_.dst(); }
+    TOOLBOX_ALWAYS_INLINE Endpoint src() const { return impl_.src(); }
+    TOOLBOX_ALWAYS_INLINE Endpoint dst() const { return impl_.dst(); }
 
     friend std::ostream& operator<<(std::ostream& os, const TypedPacket& self) {
         os << "src:'"<<self.src() << "',"

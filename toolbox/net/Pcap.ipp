@@ -3,6 +3,7 @@
 #include "Pcap.hpp"
 #include "toolbox/net/Endpoint.hpp"
 #include "toolbox/net/IpAddr.hpp"
+#include "toolbox/sys/Time.hpp"
 
 #include <netinet/in.h>
 #include <netinet/ip.h>
@@ -23,6 +24,9 @@ inline PcapPacket::PcapPacket(const pcap_pkthdr* pkthdr, const u_char* packet)
 , packet(packet)
 {}
 
+inline WallTime PcapPacket::recv_timestamp() const {
+    return toolbox::sys::to_time<WallClock>(pkthdr->ts);
+}
 inline std::size_t PcapPacket::len() const
 {
     return pkthdr->len;

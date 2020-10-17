@@ -14,6 +14,7 @@
 #include "toolbox/net/IpAddr.hpp"
 #include "toolbox/net/Protocol.hpp"
 
+#include "toolbox/sys/Time.hpp"
 #include "toolbox/util/IntTypes.hpp"
 #include "toolbox/util/String.hpp"
 
@@ -43,6 +44,7 @@ public:
 public:
     PcapPacket(const pcap_pkthdr* pkthdr, const u_char* packet);
     
+    WallTime recv_timestamp() const;
     // total length
     std::size_t len() const;
 
