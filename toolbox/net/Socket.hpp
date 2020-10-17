@@ -78,7 +78,7 @@ inline AddrInfoPtr getaddrinfo(const char* node, const char* service, int family
 {
     addrinfo hints{};
     // If node is not specified, then return a wildcard address suitable for bind()ing.
-    hints.ai_flags = node ? 0 : AI_PASSIVE;
+    hints.ai_flags = AI_NUMERICSERV | (node ? 0 : AI_PASSIVE);
     hints.ai_family = family;
     hints.ai_socktype = type;
     hints.ai_protocol = protocol;
