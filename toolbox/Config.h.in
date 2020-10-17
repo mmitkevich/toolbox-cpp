@@ -53,4 +53,9 @@
  */
 #define TOOLBOX_HAVE_SYSTEMTAP @TOOLBOX_HAVE_SYSTEMTAP@
 
+#define TOOLBOX_NO_INLINE __attribute__((noinline)) 
+#define TOOLBOX_ALWAYS_INLINE __attribute__((always_inline))
+#define TOOLBOX_LIKELY(x) __builtin_expect((x),1)
+#define TOOLBOX_UNLIKELY(x) __builtin_expect((x),0)
+
 #endif // TOOLBOX_CONFIG_H
