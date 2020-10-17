@@ -15,6 +15,8 @@
 // limitations under the License.
 
 #include "Endpoint.hpp"
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 using namespace std;
 
@@ -54,13 +56,15 @@ pair<string, string> split_uri(const string& uri)
 }
 } // namespace
 
-AddrInfoPtr parse_endpoint(const string& uri, int type)
+AddrInfoPtr parse_endpoint(const string& uri, int type, int default_family/*=AF_UNSPEC*/)
 {
     int family{-1}, protocol{0};
     const auto [scheme, addr] = split_uri(uri);
-    if (scheme.empty()) {
-        family = AF_UNSPEC;
-    } else if (scheme == "ip4") {
+    
+    if (scheme.empty())
+        family = default_family;
+
+    if (scheme == "ip4") {
         family = AF_INET;
     } else if (scheme == "ip6") {
         family = AF_INET6;
@@ -86,6 +90,14 @@ AddrInfoPtr parse_endpoint(const string& uri, int type)
         }
     } else if (scheme == "unix") {
         return get_unix_addrinfo(addr, type);
+    } else if(scheme.empty()) { 
+        if(protocol==0 && (family==AF_INET || family==AF_INET6)) {
+            // find reasonable defaults
+            switch(type) {
+                case SOCK_STREAM: protocol = IPPROTO_TCP; break;
+                case SOCK_DGRAM: protocol = IPPROTO_UDP; break;
+            }
+        }
     }
     if (family < 0) {
         throw invalid_argument{"invalid uri: "s + uri};
