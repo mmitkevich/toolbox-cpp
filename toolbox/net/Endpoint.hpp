@@ -18,6 +18,7 @@
 #define TOOLBOX_NET_ENDPOINT_HPP
 
 #include "toolbox/net/IpAddr.hpp"
+#include <cstdint>
 #include <toolbox/net/Protocol.hpp>
 #include <toolbox/net/Socket.hpp>
 #include <toolbox/util/TypeTraits.hpp>
@@ -64,7 +65,7 @@ inline StreamEndpoint parse_stream_endpoint(const std::string& uri)
     return {ai->ai_addr, ai->ai_addrlen, ai->ai_protocol};
 }
 
-inline unsigned short get_port_number(struct sockaddr *sa) {
+inline std::uint16_t get_port_number(struct sockaddr *sa) {
     switch(sa->sa_family) {
         case AF_INET: {
             struct sockaddr_in *addr = (struct sockaddr_in *) sa;
@@ -99,7 +100,7 @@ template<typename ProtocolT>
 inline BasicIpEndpoint<ProtocolT> parse_ip_endpoint(const std::string& uri) {
     const auto ai = parse_endpoint(uri, 0);
     auto ipaddr = get_ip_address(ai->ai_addr);
-    int port = get_port_number(ai->ai_addr);
+    std::uint16_t port = get_port_number(ai->ai_addr);
     return {ipaddr, port};
 }
 
