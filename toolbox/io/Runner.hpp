@@ -26,12 +26,10 @@ namespace toolbox {
 inline namespace io {
 class Reactor;
 
-TOOLBOX_API void run_reactor(Reactor& r, const std::atomic<bool>& stop);
-
 class TOOLBOX_API ReactorRunner {
   public:
     /// Start new thread and run
-    ReactorRunner(Reactor& r, ThreadConfig config);
+    ReactorRunner(Reactor& r, ThreadConfig config = std::string{"reactor"});
     ~ReactorRunner();
 
     // Copy.
@@ -44,9 +42,10 @@ class TOOLBOX_API ReactorRunner {
 
   private:
     Reactor& reactor_;
-    std::atomic<bool> stop_{false};
     std::thread thread_;
 };
+
+void wait_termination_signal();
 
 } // namespace io
 } // namespace toolbox

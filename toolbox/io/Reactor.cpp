@@ -16,6 +16,7 @@
 
 #include "Reactor.hpp"
 
+#include <atomic>
 #include <toolbox/io/TimerFd.hpp>
 #include <toolbox/sys/Log.hpp>
 
@@ -95,6 +96,25 @@ int Reactor::poll(CyclTime now, Duration timeout)
     }
     io::dispatch(now, hooks_);
     return n;
+}
+
+void Reactor::run(std::size_t busy_cycles)
+{
+    state(State::Started);
+    std::size_t i{0};
+    while (!stop_.load(std::memory_order_acquire)) {
+        // Busy-wait for a small number of cycles after work was done.
+        if (poll(CyclTime::now(), i++ < busy_cycles ? 0s : NoTimeout) > 0) {
+            // Reset counter when work has been done.
+            i = 0;
+        }
+    }
+    state_.store(State::Stopped, std::memory_order_release);
+}
+
+void Reactor::stop() {
+    state(State::Stopping);
+    stop_.store(true, std::memory_order_release);
 }
 
 void Reactor::do_wakeup() noexcept

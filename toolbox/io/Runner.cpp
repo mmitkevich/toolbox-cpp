@@ -24,25 +24,13 @@
 namespace toolbox {
 inline namespace io {
 
-void run_reactor(Reactor& r, const std::atomic<bool>& stop)
-{
-    long i{0};
-    while (!stop.load(std::memory_order_acquire)) {
-        // Busy-wait for a small number of cycles after work was done.
-        constexpr long BusyCycles{100};
-        if (r.poll(CyclTime::now(), i++ < BusyCycles ? 0s : NoTimeout) > 0) {
-            // Reset counter when work has been done.
-            i = 0;
-        }
-    }
-}
-void run_reactor_thread(Reactor& r, ThreadConfig config, const std::atomic<bool>& stop)
+void run_reactor_thread(Reactor& r, ThreadConfig config)
 {
     sig_block_all();
     try {
         set_thread_attrs(config);
         TOOLBOX_NOTICE << "started " << config.name << " thread";
-        run_reactor(r, stop);
+        r.run();
     } catch (const std::exception& e) {
         TOOLBOX_CRIT << "exception: " << e.what();
         kill(getpid(), SIGTERM);
@@ -52,15 +40,42 @@ void run_reactor_thread(Reactor& r, ThreadConfig config, const std::atomic<bool>
 
 ReactorRunner::ReactorRunner(Reactor& r, ThreadConfig config)
 : reactor_{r}
-, thread_{run_reactor_thread, std::ref(r), config, std::cref(stop_)}
+, thread_{run_reactor_thread, std::ref(r), config}
 {
 }
 
 ReactorRunner::~ReactorRunner()
 {
-    stop_.store(true, std::memory_order_release);
+    reactor_.stop();
     reactor_.wakeup();
     thread_.join();
+}
+
+// Wait for termination.
+void wait_termination_signal() {
+    SigWait sig_wait;
+    for (;;) {
+        try {
+        switch (const auto sig = sig_wait()) {
+            case SIGHUP:
+                TOOLBOX_INFO << "received SIGHUP";
+                continue;
+            case SIGINT:
+                TOOLBOX_INFO << "received SIGINT";
+                break;
+            case SIGTERM:
+                TOOLBOX_INFO << "received SIGTERM";
+                break;
+            default:
+                TOOLBOX_INFO << "received signal: " << sig;
+                continue;
+            }
+            break;
+        }catch(const std::exception& e) {
+            TOOLBOX_ERROR << "exception: " << e.what();        
+            continue;
+        }
+    }
 }
 
 } // namespace io

@@ -17,6 +17,7 @@
 #ifndef TOOLBOX_NET_SOCKET_HPP
 #define TOOLBOX_NET_SOCKET_HPP
 
+#include <sstream>
 #include <toolbox/net/Error.hpp>
 
 #include <toolbox/io/File.hpp>
@@ -118,7 +119,9 @@ inline unsigned if_nametoindex(const char* ifname)
     unsigned ifindex{0};
     if (ifname) {
         if (!(ifindex = ::if_nametoindex(ifname))) {
-            throw std::system_error{make_sys_error(errno), "if_nametoindex"};
+            std::stringstream ss;
+            ss << "if_nametoindex" << ifname;
+            throw std::system_error{make_sys_error(errno), ss.str()};
         }
     }
     return ifindex;

@@ -16,13 +16,13 @@
 
 #ifndef TOOLBOX_IO_REACTOR_HPP
 #define TOOLBOX_IO_REACTOR_HPP
-
+#include <atomic>
 #include <toolbox/io/Epoll.hpp>
 #include <toolbox/io/EventFd.hpp>
 #include <toolbox/io/Hook.hpp>
 #include <toolbox/io/Waker.hpp>
 #include <toolbox/io/Timer.hpp>
-
+#include <toolbox/io/State.hpp>
 namespace toolbox {
 inline namespace io {
 
@@ -34,6 +34,8 @@ using IoSlot = BasicSlot<CyclTime, int, unsigned>;
 class TOOLBOX_API Reactor : public Waker {
   public:
     using Event = EpollEvent;
+
+    using StateChangedSignal = toolbox::util::Signal<Reactor*, State>;
     class Handle {
       public:
         Handle(Reactor& reactor, int fd, int sid)
@@ -141,7 +143,12 @@ class TOOLBOX_API Reactor : public Waker {
 
     void add_hook(Hook& hook) noexcept { hooks_.push_back(hook); }
     int poll(CyclTime now, Duration timeout = NoTimeout);
-
+    static constexpr long BusyWaitCycles{100};
+    void run(std::size_t busy_cycles = BusyWaitCycles);
+    void stop();
+    StateChangedSignal& state_changed() noexcept { return state_changed_; }
+    State state() const noexcept { return state_; }
+    void state(State val) noexcept { state_.store(val, std::memory_order_release); state_changed().invoke(this, val); }
   protected:
     /// Thread-safe.
     void do_wakeup() noexcept final;
@@ -169,6 +176,9 @@ class TOOLBOX_API Reactor : public Waker {
     TimerPool tp_;
     std::array<TimerQueue, 2> tqs_{tp_, tp_};
     HookList hooks_;
+    std::atomic<bool> stop_{false};
+    StateChangedSignal state_changed_;
+    std::atomic<State> state_{State::Stopped};
 };
 
 } // namespace io

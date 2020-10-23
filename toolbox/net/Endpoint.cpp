@@ -56,9 +56,9 @@ pair<string, string> split_uri(const string& uri)
 }
 } // namespace
 
-AddrInfoPtr parse_endpoint(const string& uri, int type, int default_family/*=AF_UNSPEC*/)
+AddrInfoPtr parse_endpoint(const string& uri, int type, int default_family/*=-1*/)
 {
-    int family{-1}, protocol{0};
+    int family{default_family}, protocol{0};
     const auto [scheme, addr] = split_uri(uri);
     
     if (scheme.empty())

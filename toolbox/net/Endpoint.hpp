@@ -51,7 +51,7 @@ using UnixEndpoint = boost::asio::local::basic_endpoint<ProtocolT>;
 using UnixDgramEndpoint = UnixEndpoint<UnixDgramProtocol>;
 using UnixStreamEndpoint = UnixEndpoint<UnixStreamProtocol>;
 
-TOOLBOX_API AddrInfoPtr parse_endpoint(const std::string& uri, int type=0, int default_family=AF_UNSPEC);
+TOOLBOX_API AddrInfoPtr parse_endpoint(const std::string& uri, int type=0, int default_family=-1);
 
 inline DgramEndpoint parse_dgram_endpoint(const std::string& uri)
 {
@@ -97,8 +97,8 @@ inline IpAddr get_ip_address(struct sockaddr *sa) {
 }
 
 template<typename ProtocolT>
-inline BasicIpEndpoint<ProtocolT> parse_ip_endpoint(const std::string& uri) {
-    const auto ai = parse_endpoint(uri, 0);
+inline BasicIpEndpoint<ProtocolT> parse_ip_endpoint(const std::string& uri, int type=0, int default_family=-1) {
+    const auto ai = parse_endpoint(uri, type, default_family);
     auto ipaddr = get_ip_address(ai->ai_addr);
     std::uint16_t port = get_port_number(ai->ai_addr);
     return {ipaddr, port};
