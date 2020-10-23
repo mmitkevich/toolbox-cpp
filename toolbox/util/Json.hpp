@@ -3,13 +3,16 @@
 #include "toolbox/util/Config.hpp"
 #include "toolbox/util/RobinHood.hpp"
 #include "toolbox/util/InternedStrings.hpp"
+#include "toolbox/sys/Error.hpp"
 
 #include <cmath>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <ostream>
+#include <fstream>
 #include <initializer_list>
+#include <istream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -74,6 +77,7 @@ struct Pretty {
 class JsonError : public std::runtime_error {
 public:
     JsonError(std::string what) : std::runtime_error(what) {}
+    JsonError(std::string what, std::string key) : std::runtime_error("'"+key+"':"+what) {}
 };
 
 class MutableElement {
@@ -486,7 +490,18 @@ public:
         }
         return it->get<T>();
     }
+    
+    template<typename ElementT>
+    static inline void copy(ElementT ve, MutableElement& result);
 
+    template<typename ElementT>
+    static inline auto to_object(ElementT &e) {
+    if constexpr(std::is_same_v<ElementT, simdjson::dom::element>) {
+        return simdjson::dom::object(e);
+    } else {
+        return e;
+    }
+}
 private:
     MutableElement& operator=(const MutableElement& rhs) {
         element_type_ = rhs.element_type_;
@@ -549,6 +564,24 @@ inline bool MutableElement::get() {
     return get_bool();
 }
 
+inline std::string get_file_contents(const char *filename)
+{
+    std::ifstream in(filename, std::ios::in | std::ios::binary);
+    if(in)
+    {
+        std::string contents;
+        in.seekg(0, std::ios::end);
+        contents.resize(in.tellg());
+        in.seekg(0, std::ios::beg);
+        in.read(&contents[0], contents.size());
+        in.close();
+        return contents;
+    }
+    std::stringstream ss;
+    ss << "get_file_contents "<<filename;
+    throw std::system_error{make_sys_error(errno), ss.str()};
+}
+
 /// Usecase: create MutableDocument, fill with some config, pass to somecode as const, drop alltogether.
 class MutableDocument: public MutableElement {
 public:
@@ -569,6 +602,15 @@ public:
     MutableDocument(const MutableElement &rhs) {
         *static_cast<MutableElement*>(this) = rhs;
     }
+    void parse_json_file(std::string_view path) {
+        auto buf = get_file_contents(path.data());
+        parse_json(buf);
+    }
+    void parse_json(std::string_view buf) {
+        Parser parser;
+        simdjson::dom::element json =  parser.parse(buf.data(), buf.size());
+        MutableElement::copy(json, *this);
+    }
 private:
     std::vector<MutableElement> elements_;
     toolbox::util::InternedStrings strings_;
@@ -576,8 +618,8 @@ private:
 
 inline MutableElement& MutableElement::at(std::string_view key)
 {
-    //if(element_type_!=element_type::OBJECT && element_type_!=element_type::NULL_VALUE)
-    //    throw Error(simdjson::error_code::INCORRECT_TYPE);
+    if(element_type_!=element_type::OBJECT && element_type_!=element_type::NULL_VALUE)
+        throw JsonError("object type expected", std::string{key});
     element_type_ = element_type::OBJECT;
     MutableElement* e = value_.child_;
     MutableElement* tail = e;
@@ -735,17 +777,10 @@ inline MutableElement& MutableElement::operator=(MutableElement&& rhs) {
     return *this;
 }
 
-template<typename ElementT>
-inline auto to_object(ElementT &e) {
-    if constexpr(std::is_same_v<ElementT, simdjson::dom::element>) {
-        return simdjson::dom::object(e);
-    } else {
-        return e;
-    }
-}
+
 
 template<typename ElementT>
-inline void copy(ElementT ve, MutableElement& result) {
+inline void MutableElement::copy(ElementT ve, MutableElement& result) {
     switch(ve.type()) {
         case ElementType::BOOL: result = MutableElement(ve.get_bool()); break;
         case ElementType::INT64: result = MutableElement(ve.get_int64()); break;
@@ -754,15 +789,15 @@ inline void copy(ElementT ve, MutableElement& result) {
         case ElementType::NULL_VALUE: result = MutableElement(); break;
         case ElementType::STRING: result = MutableElement(ve.get_string()); break;
         case ElementType::OBJECT: {
-            for(auto [k, v]: to_object(ve)) {
-                copy(v, result[k]);
+            for(auto [k, v]: MutableElement::to_object(ve)) {
+                MutableElement::copy(v, result[k]);
             }
             break;
         }
         case ElementType::ARRAY: {
             std::size_t i=0;
             for(auto v: ve) {
-                copy(v, result[i++]);
+                MutableElement::copy(v, result[i++]);
             }
             break;
         }
