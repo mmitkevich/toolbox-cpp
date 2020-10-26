@@ -110,4 +110,10 @@ BOOST_AUTO_TEST_CASE(JsonParseMutable)
     ss << d;
     BOOST_CHECK_EQUAL(ss.str(), json);
 }
+BOOST_AUTO_TEST_CASE(JsonComments)
+{
+    std::string js = "[\"js\non\"//comments\n,3]";
+    MutableDocument::cpp_comments_to_whitespace(js);
+    std::cout << "\n\ndecommentized:\n"<<js;
+}
 BOOST_AUTO_TEST_SUITE_END()

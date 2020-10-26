@@ -604,7 +604,33 @@ public:
     }
     void parse_json_file(std::string_view path) {
         auto buf = get_file_contents(path.data());
+        cpp_comments_to_whitespace(buf);
         parse_json(buf);
+    }
+    static void cpp_comments_to_whitespace(std::string &buf) {
+        bool is_string = false;
+        bool is_comment = false;
+        for(std::size_t i=0; i<buf.size(); i++) {
+
+            switch(buf[i]) {
+                case '/':
+                    if(i>0 && buf[i-1]=='/' && !is_string) {
+                        buf[i] = buf[i-1] = ' ';
+                        is_comment = true;
+                    }
+                    break;
+                case '\n':
+                    if(!is_string)
+                        is_comment = false;
+                    break;
+                case '\"':
+                    if(!is_comment && !(i>0 && buf[i-1]=='\\'))
+                        is_string = !is_string;
+                    break;
+            }
+            if(is_comment)
+                buf[i] = ' ';
+        }
     }
     void parse_json(std::string_view buf) {
         Parser parser;
