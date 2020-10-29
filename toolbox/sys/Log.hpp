@@ -130,9 +130,9 @@ class Log {
 
 // clang-format off
 #ifdef TOOLBOX_ENABLE_LOG_FILE_LINE
-#define TOOLBOX_LOG(LEVEL) toolbox::is_log_level(LEVEL) && toolbox::Log{LEVEL} << __FILE__ << ":" << __LINE__<<": "
+#  define TOOLBOX_LOG(LEVEL) toolbox::is_log_level(LEVEL) && toolbox::Log{LEVEL} << __FILE__ << ":" << __LINE__<<": "
 #else
-#define TOOLBOX_LOG(LEVEL) toolbox::is_log_level(LEVEL) && toolbox::Log{LEVEL}
+#  define TOOLBOX_LOG(LEVEL) toolbox::is_log_level(LEVEL) && toolbox::Log{LEVEL}
 #endif
 
 #define TOOLBOX_CRIT TOOLBOX_LOG(toolbox::Log::Crit)
@@ -142,11 +142,11 @@ class Log {
 #define TOOLBOX_INFO TOOLBOX_LOG(toolbox::Log::Info)
 
 #if TOOLBOX_BUILD_DEBUG
-#define TOOLBOX_DEBUG TOOLBOX_LOG(toolbox::Log::Debug)
+#  define TOOLBOX_DEBUG TOOLBOX_LOG(toolbox::Log::Debug)
 #define TOOLBOX_DUMP TOOLBOX_LOG(toolbox::Log::Dump)
 #else
-#define TOOLBOX_DEBUG false && toolbox::Log{toolbox::Log::Debug}
-#define TOOLBOX_DUMP false && toolbox::Log{toolbox::Log::Dump}
+#  define TOOLBOX_DEBUG false && toolbox::Log{toolbox::Log::Debug}
+#  define TOOLBOX_DUMP false && toolbox::Log{toolbox::Log::Dump}
 #endif
 // clang-format on
 
