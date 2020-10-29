@@ -130,6 +130,7 @@ set(lib_SOURCES
   util/Version.cpp
   util/Pool.cpp
   util/Json.cpp
+  util/Xml.cpp
   )
 
 if(CURL_FOUND)
@@ -269,6 +270,7 @@ set(test_SOURCES
   util/Version.ut.cpp
   util/Pool.ut.cpp
   util/Json.ut.cpp
+  util/Xml.ut.cpp
   )
 
 add_executable(tb-core-test
