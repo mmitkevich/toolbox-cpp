@@ -133,6 +133,7 @@ class Log {
 #define TOOLBOX_LOG(LEVEL) toolbox::is_log_level(LEVEL) && toolbox::Log{LEVEL} << __FILE__ << ":" << __LINE__<<": "
 #else
 #define TOOLBOX_LOG(LEVEL) toolbox::is_log_level(LEVEL) && toolbox::Log{LEVEL}
+#endif
 
 #define TOOLBOX_CRIT TOOLBOX_LOG(toolbox::Log::Crit)
 #define TOOLBOX_ERROR TOOLBOX_LOG(toolbox::Log::Error)
