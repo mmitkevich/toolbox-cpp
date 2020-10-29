@@ -42,17 +42,18 @@ struct EndpointsFilter {
                 return true;
         return false;
     }
-    template<typename PacketT>
-    TOOLBOX_ALWAYS_INLINE bool operator()(const PacketT& packet) {
+    template<typename HeaderT>
+    TOOLBOX_ALWAYS_INLINE bool operator()(const HeaderT& header) {
         
-        if(!udp && packet.protocol().protocol()==IPPROTO_UDP)
+        if(!udp && header.protocol().protocol()==IPPROTO_UDP)
             return false;
-        if(!tcp && packet.protocol().protocol()==IPPROTO_TCP)
+        if(!tcp && header.protocol().protocol()==IPPROTO_TCP)
             return false;
 
-        if(!sources.empty() && !match(sources, packet.src()))
+        if(!sources.empty() && !match(sources, header.src()))
             return false;
-        if(!destinations.empty() && !match(destinations, packet.dst()))
+
+        if(!destinations.empty() && !match(destinations, header.dst()))
             return false;
         return true;
     }

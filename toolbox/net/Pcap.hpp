@@ -38,39 +38,56 @@ public:
     : std::runtime_error(msg) {}
 };
 
-class TOOLBOX_API PcapPacket {
+class PcapPacket;
+
+class PcapHeader {
 public:
     using Endpoint = IpEndpoint;
 public:
-    PcapPacket(const pcap_pkthdr* pkthdr, const u_char* packet);
-    
+    PcapHeader(const PcapPacket& self);
     WallTime recv_timestamp() const;
-    // total length
-    std::size_t len() const;
-
-    // pointer to payload and payload size
-    const char* data() const;
-
-    std::size_t size() const;
-
-    // protocol
-    IpProtocol protocol() const;    
 
     // endpoints
     IpEndpoint src() const;
     IpEndpoint dst() const;
+    
+    // protocol
+    IpProtocol protocol() const; 
 
-    friend std::ostream& operator<<(std::ostream& os, const PcapPacket& rhs) {
-        switch(rhs.protocol().protocol()) {
+    friend std::ostream& operator<<(std::ostream& os, const PcapHeader& self) {
+        int proto = self.protocol().protocol();
+        os << "proto:";        
+        switch(proto) {
             case IPPROTO_TCP: os << "tcp"; break;
             case IPPROTO_UDP: os << "udp"; break;
             case IPPROTO_PIM: os << "pim"; break;
-            default: os << "proto("<<rhs.protocol().protocol() << ")"; break;
+            default: os << proto; break;
         }
-        os << " ";
-        os << rhs.src().address()<<":"<<rhs.src().port()<<" -> "<<rhs.dst().address()<<":"<<rhs.dst().port()<<" ";
+        os << "src:'"<<self.src()<<"',dst:'"<<self.dst()<<"'";
         return os;
     }
+
+private:
+    const PcapPacket& self;
+};
+
+class TOOLBOX_API PcapPacket {
+public:
+    using Header = PcapHeader;
+public:
+    PcapPacket(const pcap_pkthdr* pkthdr, const u_char* packet);
+    
+    // RawData
+    const char* data() const;
+    std::size_t size() const;
+    std::string_view str() const;
+
+    // Header
+    PcapHeader header() const { return PcapHeader(*this); }
+        
+    friend std::ostream& operator<<(std::ostream& os, const PcapPacket& self) {
+        return os << "header:"<<self.header() << ",size="<<self.size();
+    } 
 protected:
     const struct ether_header* ether_hdr() const;
     const struct ip* ip_hdr() const;
@@ -82,9 +99,11 @@ protected:
     unsigned short dst_port() const;
     std::string src_host() const;
     std::string dst_host() const;
+    std::size_t len() const;     
 protected:
     const pcap_pkthdr* pkthdr;
     const u_char* packet;
+    friend class PcapHeader;
 };
 
 

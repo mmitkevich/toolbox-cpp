@@ -19,17 +19,74 @@
 
 namespace toolbox{ inline namespace net {
 
+inline PcapHeader::PcapHeader(const PcapPacket& self)
+: self(self) {}
+
+inline WallTime PcapHeader::recv_timestamp() const {
+    return toolbox::sys::to_time<WallClock>(self.pkthdr->ts);
+}
+
+inline IpEndpoint PcapHeader::src() const 
+{
+    int family = self.protocol_family();
+    switch(family) {
+        case AF_INET: {
+            using Addr = boost::asio::ip::address_v4;
+            return {Addr((Addr::uint_type) ntohl(self.ip_hdr()->ip_src.s_addr)), self.src_port()};
+        }
+        case AF_INET6: {
+            using Addr = boost::asio::ip::address_v6;
+            Addr::bytes_type bytes;
+            std::memcpy(bytes.data(), &self.ip_hdr()->ip_src.s_addr, bytes.size());
+            return {Addr(bytes), self.src_port()};
+        }
+        default:
+            return {IpProtocol{}, 0}; // AF_UNSPEC
+    }
+}
+inline IpEndpoint PcapHeader::dst() const 
+{
+    int family = self.protocol_family();
+    switch(family) {
+        case AF_INET: {
+            using Addr = boost::asio::ip::address_v4;
+            return {Addr((Addr::uint_type) ntohl(self.ip_hdr()->ip_dst.s_addr)), self.dst_port()};
+        }
+        case AF_INET6: {
+            using Addr = boost::asio::ip::address_v6;
+            Addr::bytes_type bytes;
+            std::memcpy(bytes.data(), &self.ip_hdr()->ip_dst.s_addr, bytes.size());
+            return {Addr(bytes), self.dst_port()};
+        }
+        default:
+            return {IpProtocol{}, 0}; // AF_UNSPEC
+    }
+}
+
+inline IpProtocol PcapHeader::protocol() const
+{
+    int sock_type = 0;
+    int ip_proto = self.ip_hdr()->ip_p;
+    int family = self.protocol_family();
+    switch(ip_proto) {
+        case IPPROTO_TCP: sock_type = SOCK_STREAM; break;
+        case IPPROTO_UDP: sock_type = SOCK_DGRAM; break;
+    }
+    return IpProtocol(family, ip_proto, sock_type);
+}
+
 inline PcapPacket::PcapPacket(const pcap_pkthdr* pkthdr, const u_char* packet)
 : pkthdr(pkthdr)
 , packet(packet)
 {}
 
-inline WallTime PcapPacket::recv_timestamp() const {
-    return toolbox::sys::to_time<WallClock>(pkthdr->ts);
-}
 inline std::size_t PcapPacket::len() const
 {
     return pkthdr->len;
+}
+
+inline std::string_view PcapPacket::str() const {
+    return {data(), size()};
 }
 
 inline const char* PcapPacket::data() const
@@ -103,17 +160,6 @@ inline int PcapPacket::protocol_family() const {
     }
     return family;
 }
-inline IpProtocol PcapPacket::protocol() const
-{
-    int sock_type = 0;
-    int ip_proto = ip_hdr()->ip_p;
-    int family = protocol_family();
-    switch(ip_proto) {
-        case IPPROTO_TCP: sock_type = SOCK_STREAM; break;
-        case IPPROTO_UDP: sock_type = SOCK_DGRAM; break;
-    }
-    return IpProtocol(family, ip_proto, sock_type);
-}
 
 inline unsigned short PcapPacket::src_port() const
 {
@@ -149,41 +195,5 @@ inline std::string PcapPacket::dst_host() const
     return buf;
 }
 
-inline IpEndpoint PcapPacket::src() const 
-{
-    int family = protocol_family();
-    switch(family) {
-        case AF_INET: {
-            using Addr = boost::asio::ip::address_v4;
-            return {Addr((Addr::uint_type) ntohl(ip_hdr()->ip_src.s_addr)), src_port()};
-        }
-        case AF_INET6: {
-            using Addr = boost::asio::ip::address_v6;
-            Addr::bytes_type bytes;
-            std::memcpy(bytes.data(), &ip_hdr()->ip_src.s_addr, bytes.size());
-            return {Addr(bytes), src_port()};
-        }
-        default:
-            return {IpProtocol{}, 0}; // AF_UNSPEC
-    }
-}
-inline IpEndpoint PcapPacket::dst() const 
-{
-    int family = protocol_family();
-    switch(family) {
-        case AF_INET: {
-            using Addr = boost::asio::ip::address_v4;
-            return {Addr((Addr::uint_type) ntohl(ip_hdr()->ip_dst.s_addr)), dst_port()};
-        }
-        case AF_INET6: {
-            using Addr = boost::asio::ip::address_v6;
-            Addr::bytes_type bytes;
-            std::memcpy(bytes.data(), &ip_hdr()->ip_dst.s_addr, bytes.size());
-            return {Addr(bytes), dst_port()};
-        }
-        default:
-            return {IpProtocol{}, 0}; // AF_UNSPEC
-    }
-}
 
 }}
