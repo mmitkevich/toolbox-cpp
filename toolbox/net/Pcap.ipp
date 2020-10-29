@@ -19,26 +19,31 @@
 
 namespace toolbox{ inline namespace net {
 
-inline PcapHeader::PcapHeader(const PcapPacket& self)
-: self(self) {}
+inline const PcapPacket& PcapHeader::self() const {
+    return *static_cast<const PcapPacket*>(this);
+}
+
+inline PcapPacket& PcapHeader::self() {
+    return *static_cast<PcapPacket*>(this);
+}
 
 inline WallTime PcapHeader::recv_timestamp() const {
-    return toolbox::sys::to_time<WallClock>(self.pkthdr->ts);
+    return toolbox::sys::to_time<WallClock>(self().pkthdr->ts);
 }
 
 inline IpEndpoint PcapHeader::src() const 
 {
-    int family = self.protocol_family();
+    int family = self().protocol_family();
     switch(family) {
         case AF_INET: {
             using Addr = boost::asio::ip::address_v4;
-            return {Addr((Addr::uint_type) ntohl(self.ip_hdr()->ip_src.s_addr)), self.src_port()};
+            return {Addr((Addr::uint_type) ntohl(self().ip_hdr()->ip_src.s_addr)), self().src_port()};
         }
         case AF_INET6: {
             using Addr = boost::asio::ip::address_v6;
             Addr::bytes_type bytes;
-            std::memcpy(bytes.data(), &self.ip_hdr()->ip_src.s_addr, bytes.size());
-            return {Addr(bytes), self.src_port()};
+            std::memcpy(bytes.data(), &self().ip_hdr()->ip_src.s_addr, bytes.size());
+            return {Addr(bytes), self().src_port()};
         }
         default:
             return {IpProtocol{}, 0}; // AF_UNSPEC
@@ -46,17 +51,17 @@ inline IpEndpoint PcapHeader::src() const
 }
 inline IpEndpoint PcapHeader::dst() const 
 {
-    int family = self.protocol_family();
+    int family = self().protocol_family();
     switch(family) {
         case AF_INET: {
             using Addr = boost::asio::ip::address_v4;
-            return {Addr((Addr::uint_type) ntohl(self.ip_hdr()->ip_dst.s_addr)), self.dst_port()};
+            return {Addr((Addr::uint_type) ntohl(self().ip_hdr()->ip_dst.s_addr)), self().dst_port()};
         }
         case AF_INET6: {
             using Addr = boost::asio::ip::address_v6;
             Addr::bytes_type bytes;
-            std::memcpy(bytes.data(), &self.ip_hdr()->ip_dst.s_addr, bytes.size());
-            return {Addr(bytes), self.dst_port()};
+            std::memcpy(bytes.data(), &self().ip_hdr()->ip_dst.s_addr, bytes.size());
+            return {Addr(bytes), self().dst_port()};
         }
         default:
             return {IpProtocol{}, 0}; // AF_UNSPEC
@@ -66,8 +71,8 @@ inline IpEndpoint PcapHeader::dst() const
 inline IpProtocol PcapHeader::protocol() const
 {
     int sock_type = 0;
-    int ip_proto = self.ip_hdr()->ip_p;
-    int family = self.protocol_family();
+    int ip_proto = self().ip_hdr()->ip_p;
+    int family = self().protocol_family();
     switch(ip_proto) {
         case IPPROTO_TCP: sock_type = SOCK_STREAM; break;
         case IPPROTO_UDP: sock_type = SOCK_DGRAM; break;

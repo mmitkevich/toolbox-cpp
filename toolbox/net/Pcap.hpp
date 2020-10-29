@@ -44,7 +44,6 @@ class PcapHeader {
 public:
     using Endpoint = IpEndpoint;
 public:
-    PcapHeader(const PcapPacket& self);
     WallTime recv_timestamp() const;
 
     // endpoints
@@ -66,12 +65,11 @@ public:
         os << "src:'"<<self.src()<<"',dst:'"<<self.dst()<<"'";
         return os;
     }
-
-private:
-    const PcapPacket& self;
+    PcapPacket& self();
+    const PcapPacket& self() const;
 };
 
-class TOOLBOX_API PcapPacket {
+class TOOLBOX_API PcapPacket : public PcapHeader {
 public:
     using Header = PcapHeader;
 public:
@@ -83,7 +81,8 @@ public:
     std::string_view str() const;
 
     // Header
-    PcapHeader header() const { return PcapHeader(*this); }
+    const PcapHeader& header() const { return *this; }
+    PcapHeader& header() { return *this; }
         
     friend std::ostream& operator<<(std::ostream& os, const PcapPacket& self) {
         return os << "header:"<<self.header() << ",size="<<self.size();
