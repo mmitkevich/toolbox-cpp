@@ -109,7 +109,7 @@ void Reactor::run(std::size_t busy_cycles)
             i = 0;
         }
     }
-    state_.store(State::Stopped, std::memory_order_release);
+    state(State::Stopped);
 }
 
 void Reactor::stop() {
