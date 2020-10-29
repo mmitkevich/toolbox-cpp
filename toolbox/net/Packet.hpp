@@ -19,13 +19,15 @@ public:
     const char* data() const { return data_; }
     std::size_t size() const { return size_; }
 
-    Endpoint src() { return src_; }
-    Endpoint dst() { return dst_; }
+    Endpoint src() const { return src_; }
+    Endpoint dst() const { return dst_; }
+    WallTime recv_timestamp() const { return recv_ts_;}
 protected:
     Endpoint src_{};
     Endpoint dst_{};
     char* data_{nullptr};
     std::size_t size_{};
+    WallTime recv_ts_{WallClock::now()};
 };
 
 /// Typed packet
@@ -39,11 +41,11 @@ public:
     using BinaryPacket = BinaryPacketT;
     using value_type = T;
 public:
-    TOOLBOX_ALWAYS_INLINE TypedPacket(BinaryPacketT& impl)
+    TOOLBOX_ALWAYS_INLINE TypedPacket(const BinaryPacketT& impl)
     : impl_(impl){}
 
     TOOLBOX_ALWAYS_INLINE WallTime recv_timestamp() const { return impl_.recv_timestamp(); }
-    TOOLBOX_ALWAYS_INLINE T* data() { return (T*)impl_.data(); }
+    //TOOLBOX_ALWAYS_INLINE T* data() { return (T*)impl_.data(); }
     TOOLBOX_ALWAYS_INLINE const T* data() const { return (T*)impl_.data(); }
     TOOLBOX_ALWAYS_INLINE std::size_t size() const { return impl_.size()/sizeof(T); }
 
@@ -61,7 +63,7 @@ public:
         return os;
     }
 protected:
-    BinaryPacketT& impl_;
+    const BinaryPacketT& impl_;
 };
 
 
