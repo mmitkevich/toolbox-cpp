@@ -41,7 +41,7 @@ using Int = std::int64_t;
 using UInt = std::uint64_t;
 using Bool = bool;
 using StringView = std::string_view;
-using DocumentView = Element;
+using Document = Element;
 using ElementType = simdjson::dom::element_type;
 
 struct Key {
@@ -602,10 +602,10 @@ public:
     MutableDocument(const MutableElement &rhs) {
         *static_cast<MutableElement*>(this) = rhs;
     }
-    void parse_json_file(std::string_view path) {
+    void parse_file(std::string_view path) {
         auto buf = get_file_contents(path.data());
         cpp_comments_to_whitespace(buf);
-        parse_json(buf);
+        parse(buf);
     }
     static void cpp_comments_to_whitespace(std::string &buf) {
         bool is_string = false;
@@ -632,7 +632,7 @@ public:
                 buf[i] = ' ';
         }
     }
-    void parse_json(std::string_view buf) {
+    void parse(std::string_view buf) {
         Parser parser;
         simdjson::dom::element json =  parser.parse(buf.data(), buf.size());
         MutableElement::copy(json, *this);
