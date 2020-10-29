@@ -19,6 +19,7 @@
 
 #include "toolbox/net/IpAddr.hpp"
 #include <cstdint>
+#include <sys/socket.h>
 #include <toolbox/net/Protocol.hpp>
 #include <toolbox/net/Socket.hpp>
 #include <toolbox/util/TypeTraits.hpp>
@@ -122,12 +123,12 @@ struct TypeTraits<StreamEndpoint> {
     static auto from_string(std::string_view sv) { return parse_stream_endpoint(std::string{sv}); }
     static auto from_string(const std::string& s) { return parse_stream_endpoint(s); }
 };
-template <>
-struct TypeTraits<IpEndpoint> {
-    static IpEndpoint from_string(std::string_view sv) { return from_string(std::string(sv)); }
-    static IpEndpoint from_string(const std::string& s) { 
-        auto addrinfo = parse_endpoint(s, SOCK_DGRAM);
-        IpEndpoint result {get_ip_address(addrinfo->ai_addr), get_port_number(addrinfo->ai_addr)};
+template <typename ProtocolT>
+struct TypeTraits<BasicIpEndpoint<ProtocolT>> {
+    static auto from_string(std::string_view sv) { return from_string(std::string(sv)); }
+    static auto from_string(const std::string& s, int type = SOCK_STREAM, int family=AF_INET) { 
+        auto addrinfo = parse_endpoint(s, type, family);
+        BasicIpEndpoint<ProtocolT> result {get_ip_address(addrinfo->ai_addr), get_port_number(addrinfo->ai_addr)};
         return result;
     }
 };
