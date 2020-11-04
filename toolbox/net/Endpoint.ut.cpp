@@ -134,4 +134,11 @@ BOOST_AUTO_TEST_CASE(ParseStreamBindCase)
     BOOST_TEST(to_string(ep) == "tcp4://0.0.0.0:80");
 }
 
+BOOST_AUTO_TEST_CASE(ParseIpPort)
+{
+    const auto ep = parse_ip_endpoint<IpProtocol>("127.0.0.1:8080");
+    auto port = ep.port();
+    BOOST_TEST(port == 8080);
+    BOOST_TEST(ep.address().to_string()=="127.0.0.1");
+}
 BOOST_AUTO_TEST_SUITE_END()
