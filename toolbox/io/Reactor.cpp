@@ -100,6 +100,7 @@ int Reactor::poll(CyclTime now, Duration timeout)
 
 void Reactor::run(std::size_t busy_cycles)
 {
+    state(State::Starting);
     state(State::Started);
     std::size_t i{0};
     while (!stop_.load(std::memory_order_acquire)) {
@@ -109,12 +110,15 @@ void Reactor::run(std::size_t busy_cycles)
             i = 0;
         }
     }
+    state(State::Stopping);
     state(State::Stopped);
 }
 
 void Reactor::stop() {
-    state(State::Stopping);
-    stop_.store(true, std::memory_order_release);
+    if(state()!=State::Stopping && state()!=State::Stopped) {
+        state(State::Stopping);
+        stop_.store(true, std::memory_order_release);
+    }
 }
 
 void Reactor::do_wakeup() noexcept
