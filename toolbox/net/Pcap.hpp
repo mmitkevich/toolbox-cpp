@@ -118,6 +118,7 @@ public:
     void run() {
         open();
         loop();
+        close();
     }
     void max_packet_count(int val) { max_packet_count_ = val; }
     tbu::Signal<const PcapPacket&>& packets() { return packets_; }

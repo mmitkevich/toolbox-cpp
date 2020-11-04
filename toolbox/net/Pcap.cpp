@@ -17,6 +17,7 @@ void PcapDevice::close()
 {
     if(handle_!=nullptr)
         pcap_close(handle_);
+    handle_ = nullptr;
 }
 
 
