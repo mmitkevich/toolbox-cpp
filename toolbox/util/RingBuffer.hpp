@@ -24,7 +24,8 @@
 namespace toolbox {
 inline namespace util {
 
-template <typename ValueT>
+/// SPSC ring buffer with optional silent overwrite
+template <typename ValueT, bool Overwrite=true>
 class RingBuffer {
   public:
     explicit RingBuffer(std::size_t capacity)
@@ -63,34 +64,59 @@ class RingBuffer {
     ValueT& front() noexcept { return buf_[rpos_ & mask_]; }
     ValueT& back() noexcept { return buf_[(wpos_ - 1) & mask_]; }
     void clear() noexcept { rpos_ = wpos_ = 0; }
-    void pop() noexcept { ++rpos_; }
-    void push(const ValueT& val)
+    /// UB if empty()
+    void pop() noexcept { 
+        ++rpos_;
+    }
+    bool pop(ValueT& val) noexcept {
+        if(empty())
+            return false;
+        val = buf_[rpos_ & mask_];
+        ++rpos_;
+    }
+    bool push(const ValueT& val)
     {
+        if constexpr(!Overwrite) {
+            if(full())
+                return false;
+        }
         auto& ref = buf_[wpos_ & mask_];
         ref = val;
-        if (full()) {
-            ++rpos_;
+        if constexpr(Overwrite) {
+            if (full()) {
+                ++rpos_;    // @mmitkevich FIXME: just to keep consistent? caller should check for full anyway
+            }
         }
         ++wpos_;
+        return true;
     }
     template <typename FnT>
-    void fetch(FnT fn)
+    bool read(FnT fn)
     {
+        if(empty())
+            return false;
         const auto& ref = buf_[rpos_ & mask_];
         fn(ref);
         ++rpos_;
+        return true;
     }
     template <typename FnT>
-    void write(FnT fn)
+    bool write(FnT fn)
     {
+        if constexpr(!Overwrite) {
+            if(full())
+                return false;
+        }
         auto& ref = buf_[wpos_ & mask_];
         fn(ref);
-        if (full()) {
-            ++rpos_;
+        if constexpr(Overwrite) {
+            if (full()) {
+                ++rpos_;
+            }
         }
         ++wpos_;
+        return true;
     }
-
   private:
     // Ensure that read and write positions are in different cache-lines.
     struct alignas(64) {

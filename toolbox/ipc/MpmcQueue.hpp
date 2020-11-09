@@ -27,14 +27,7 @@
 
 namespace toolbox {
 inline namespace ipc {
-namespace detail {
-inline std::size_t file_size(int fd)
-{
-    struct stat st;
-    os::fstat(fd, st);
-    return st.st_size;
-}
-} // namespace detail
+
 
 /// MpmcQueue is a bounded MPMC queue implementation based on Dmitry Vyukov's design.
 template <typename ValueT>
@@ -76,7 +69,7 @@ class MpmcQueue {
         }
     }
     explicit MpmcQueue(FileHandle& fh)
-    : capacity_{capacity(detail::file_size(fh.get()))}
+    : capacity_{capacity(io::file_size(fh.get()))}
     , mask_{capacity_ - 1}
     , mem_map_{os::mmap(nullptr, size(capacity_), PROT_READ | PROT_WRITE, MAP_SHARED, fh.get(), 0)}
     , impl_{static_cast<Impl*>(mem_map_.get().data())}

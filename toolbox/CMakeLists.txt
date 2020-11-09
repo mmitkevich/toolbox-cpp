@@ -69,6 +69,7 @@ set(lib_SOURCES
   ipc/MpmcQueue.cpp
   ipc/Msg.cpp
   ipc/Shm.cpp
+  ipc/MagicRingBuffer.cpp
   net/DgramSock.cpp
   net/Endian.cpp
   net/Endpoint.cpp
@@ -271,6 +272,8 @@ set(test_SOURCES
   util/Pool.ut.cpp
   util/Json.ut.cpp
   util/Xml.ut.cpp
+  ipc/MagicRingBuffer.ut.cpp
+  ipc/Mmap.ut.cpp
   )
 
 add_executable(tb-core-test
