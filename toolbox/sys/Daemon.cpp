@@ -15,7 +15,7 @@
 // limitations under the License.
 
 #include "Daemon.hpp"
-
+#include "toolbox/io/Handle.hpp"
 #include "System.hpp"
 
 #include <fcntl.h> // open()
@@ -27,8 +27,8 @@ using namespace std;
 void close_all() noexcept
 {
     // Impose upper bound because Docker containers may have a very large default.
-    const int fds{min(getdtablesize(), 1024)};
-    for (int fd{STDERR_FILENO + 1}; fd < fds; ++fd) {
+    const os::FD fds{min(getdtablesize(), 1024)};
+    for (os::FD fd{STDERR_FILENO + 1}; fd < fds; ++fd) {
         close(fd);
     }
 }

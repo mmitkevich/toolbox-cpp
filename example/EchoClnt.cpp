@@ -16,6 +16,7 @@
 
 #include "toolbox/bm/Suite.hpp"
 #include "toolbox/hdr/Histogram.hpp"
+#include "toolbox/io/Handle.hpp"
 #include "toolbox/sys/Log.hpp"
 #include "toolbox/sys/Time.hpp"
 #include <exception>
@@ -43,8 +44,9 @@ class EchoConn {
     EchoConn(CyclTime now, Reactor& r, IoSock&& sock, const StreamEndpoint& ep)
     : sock_{move(sock)}
     , ep_{ep}
+    , reactor_(r)
     {
-        sub_ = r.subscribe(sock_.get(), EpollIn, bind<&EchoConn::on_input>(this));
+        sub_ = r.subscribe(sock_.get(), reactor_.poller().read_event(), bind<&EchoConn::on_input>(this));
         tmr_ = r.timer(now.mono_time(), PingInterval, Priority::Low,
                        bind<&EchoConn::on_timer>(this));
     }
@@ -60,10 +62,10 @@ class EchoConn {
     }
   private:
     ~EchoConn() = default;
-    void on_input(CyclTime now, int fd, unsigned events)
+    void on_input(CyclTime now, os::FD fd, IoEvent events)
     {
         try {
-            if (events & (EpollIn | EpollHup)) {
+            if (reactor_.poller().can_read(events)) {
                 const auto size = os::read(fd, buf_.prepare(2944));
                 if (size == 0) {
                     dispose(now);
@@ -108,6 +110,7 @@ class EchoConn {
     IoSock sock_;
     const StreamEndpoint ep_;
     Reactor::Handle sub_;
+    Reactor& reactor_;
     Buffer buf_;
     Timer tmr_;
     MonoTime sent_time_;

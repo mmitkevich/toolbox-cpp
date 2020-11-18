@@ -21,6 +21,14 @@
 #include <utility> // swap<>
 
 #include <unistd.h> // close()
+#include <toolbox/sys/Time.hpp>
+#include <toolbox/util/Slot.hpp>
+
+namespace toolbox {
+namespace os {
+    using FD = int;
+}
+}
 
 namespace toolbox {
 inline namespace io {
@@ -28,12 +36,13 @@ inline namespace io {
 template <typename PolicyT>
 class BasicHandle {
   public:
-    using Id = typename PolicyT::Id;
+    using FD = typename PolicyT::FD;
+    using value_type = FD;
 
-    static constexpr Id invalid() noexcept { return PolicyT::invalid(); }
+    static constexpr FD invalid() noexcept { return PolicyT::invalid(); }
 
     constexpr BasicHandle(std::nullptr_t = nullptr) noexcept {}
-    constexpr BasicHandle(Id id) noexcept
+    constexpr BasicHandle(FD id) noexcept
     : id_{id}
     {
     }
@@ -64,17 +73,17 @@ class BasicHandle {
     constexpr bool empty() const noexcept { return id_ == invalid(); }
     constexpr explicit operator bool() const noexcept { return id_ != invalid(); }
 
-    constexpr Id get() const noexcept { return id_; }
-    constexpr Id operator*() const noexcept { return get(); }
+    constexpr FD get() const noexcept { return id_; }
+    constexpr FD operator*() const noexcept { return get(); }
 
-    Id release() noexcept
+    FD release() noexcept
     {
         const auto id = id_;
         id_ = invalid();
         return id;
     }
     void reset(std::nullptr_t p = nullptr) noexcept { reset(invalid()); }
-    void reset(Id id) noexcept
+    void reset(FD id) noexcept
     {
         std::swap(id_, id);
         if (id != invalid()) {
@@ -84,7 +93,7 @@ class BasicHandle {
     void swap(BasicHandle& rhs) noexcept { std::swap(id_, rhs.id_); }
 
   private:
-    Id id_{invalid()};
+    FD id_{invalid()};
 };
 
 template <typename PolicyT>
@@ -99,13 +108,25 @@ constexpr bool operator!=(const BasicHandle<PolicyT>& lhs, const BasicHandle<Pol
     return !(lhs == rhs);
 }
 
+
 struct FilePolicy {
-    using Id = int;
+    using FD = toolbox::os::FD;
     static constexpr int invalid() noexcept { return -1; }
     static void close(int d) noexcept { ::close(d); }
 };
 
 using FileHandle = BasicHandle<FilePolicy>;
+
+class IoEvent {
+public:
+    IoEvent(std::uint64_t event)
+    : event_(event) {}
+    std::uint64_t get() const { return event_; }
+private:
+    std::uint64_t event_;
+}; 
+
+using IoSlot = BasicSlot<CyclTime, os::FD, IoEvent>;
 
 } // namespace io
 } // namespace toolbox

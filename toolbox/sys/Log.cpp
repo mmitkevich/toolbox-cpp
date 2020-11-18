@@ -17,7 +17,7 @@
 #include "Log.hpp"
 
 #include <toolbox/sys/Time.hpp>
-
+#include <toolbox/io/Handle.hpp>
 #include <algorithm> // max()
 #include <atomic>
 #include <mutex>
@@ -134,7 +134,7 @@ void std_logger(int level, string_view msg) noexcept
         {&tail, 1}                                   //
     };
 
-    int fd{level > Log::Warning ? STDOUT_FILENO : STDERR_FILENO};
+    os::FD fd{level > Log::Warning ? STDOUT_FILENO : STDERR_FILENO};
     // The following lock was required to avoid interleaving.
     lock_guard<mutex> lock{mutex_};
     // Best effort given that this is the logger.

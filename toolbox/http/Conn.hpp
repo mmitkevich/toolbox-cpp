@@ -17,6 +17,7 @@
 #ifndef TOOLBOX_HTTP_CONN_HPP
 #define TOOLBOX_HTTP_CONN_HPP
 
+#include "toolbox/io/Handle.hpp"
 #include <toolbox/http/Parser.hpp>
 #include <toolbox/http/Request.hpp>
 #include <toolbox/http/Stream.hpp>
@@ -182,11 +183,11 @@ class BasicHttpConn
         app_.on_http_timeout(now, ep_);
         this->dispose(now);
     }
-    void on_io_event(CyclTime now, int fd, unsigned events)
+    void on_io_event(CyclTime now, os::FD fd, IoEvent events)
     {
         auto lock = this->lock_this(now);
         try {
-            if (events & (EpollIn | EpollHup)) {
+            if (reactor_.poller().can_read(events)) {
                 if (!drain_input(now, fd)) {
                     this->dispose(now);
                     return;
@@ -194,7 +195,7 @@ class BasicHttpConn
             }
             // Do not attempt to flush the output buffer if it is empty or if we are still waiting
             // for the socket to become writable.
-            if (out_.empty() || (write_blocked_ && !(events & EpollOut))) {
+            if (out_.empty() || (write_blocked_ && !reactor_.poller().can_write(events))) {
                 return;
             }
             flush_output(now);
@@ -206,7 +207,7 @@ class BasicHttpConn
             this->dispose(now);
         }
     }
-    bool drain_input(CyclTime now, int fd)
+    bool drain_input(CyclTime now, os::FD fd)
     {
         // Limit the number of reads to avoid starvation.
         for (int i{0}; i < 4; ++i) {

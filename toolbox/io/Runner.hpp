@@ -18,30 +18,56 @@
 #define TOOLBOX_IO_RUNNER_HPP
 
 #include <toolbox/sys/Thread.hpp>
+#include <toolbox/sys/Log.hpp>
+#include <toolbox/sys/Signal.hpp>
 
 #include <atomic>
 #include <thread>
 
 namespace toolbox {
 inline namespace io {
-class Reactor;
 
-class TOOLBOX_API ReactorRunner {
+
+template<typename RunnableT>
+inline void run_thread(RunnableT& r, ThreadConfig config)
+{
+    sig_block_all();
+    try {
+        set_thread_attrs(config);
+        TOOLBOX_NOTICE << "started " << config.name << " thread";
+        r.run();
+    } catch (const std::exception& e) {
+        TOOLBOX_CRIT << "exception: " << e.what();
+        kill(getpid(), SIGTERM);
+    }
+    TOOLBOX_NOTICE << "stopping " << config.name << " thread";
+}
+
+template<class ReactorT>
+class TOOLBOX_API BasicRunner {
   public:
     /// Start new thread and run
-    ReactorRunner(Reactor& r, ThreadConfig config = std::string{"reactor"});
-    ~ReactorRunner();
+    BasicRunner(ReactorT& r, ThreadConfig config = std::string{"reactor"})
+    : reactor_{r}
+    , thread_{run_thread<ReactorT>, std::ref(r), config}
+    { }
+
+    ~BasicRunner() {
+        reactor_.stop();
+        reactor_.wakeup();
+        thread_.join();
+    }
 
     // Copy.
-    ReactorRunner(const ReactorRunner&) = delete;
-    ReactorRunner& operator=(const ReactorRunner&) = delete;
+    BasicRunner(const BasicRunner&) = delete;
+    BasicRunner& operator=(const BasicRunner&) = delete;
 
     // Move.
-    ReactorRunner(ReactorRunner&&) = delete;
-    ReactorRunner& operator=(ReactorRunner&&) = delete;
+    BasicRunner(BasicRunner&&) = delete;
+    BasicRunner& operator=(BasicRunner&&) = delete;
 
   private:
-    Reactor& reactor_;
+    ReactorT& reactor_;
     std::thread thread_;
 };
 

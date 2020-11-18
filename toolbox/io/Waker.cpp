@@ -19,7 +19,6 @@
 namespace toolbox {
 inline namespace io {
 
-Waker::~Waker() = default;
 
 } // namespace io
 } // namespace toolbox

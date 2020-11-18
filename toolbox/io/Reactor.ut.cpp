@@ -15,6 +15,7 @@
 // limitations under the License.
 
 #include "Reactor.hpp"
+#include "toolbox/io/Handle.hpp"
 
 #include <toolbox/net/Endpoint.hpp>
 #include <toolbox/net/IoSock.hpp>
@@ -28,7 +29,7 @@ using namespace toolbox;
 namespace {
 
 struct TestHandler : RefCount<TestHandler, ThreadUnsafePolicy> {
-    void on_input(CyclTime now, int fd, unsigned events)
+    void on_input(CyclTime now, os::FD fd, IoEvent events)
     {
         char buf[4];
         os::recv(fd, buf, 4, 0);
@@ -51,7 +52,7 @@ BOOST_AUTO_TEST_CASE(ReactorLevelCase)
     auto h = make_intrusive<TestHandler>();
 
     auto socks = socketpair(UnixStreamProtocol{});
-    const auto sub = r.subscribe(*socks.second, EpollIn, bind<&TestHandler::on_input>(h.get()));
+    const auto sub = r.subscribe(*socks.second, r.poller().read_event(), bind<&TestHandler::on_input>(h.get()));
 
     const auto now = CyclTime::now();
     BOOST_TEST(r.poll(now, 0ms) == 0);

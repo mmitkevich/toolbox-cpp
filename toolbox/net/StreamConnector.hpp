@@ -81,7 +81,7 @@ class StreamConnector {
     ~StreamConnector() = default;
 
   private:
-    void on_io_event(CyclTime now, int fd, unsigned events)
+    void on_io_event(CyclTime now, os::FD fd, IoEvent events)
     {
         IoSock sock{std::move(sock_)};
         sub_.reset();

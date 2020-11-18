@@ -27,7 +27,7 @@ inline namespace io {
 class TOOLBOX_API Waker {
   public:
     Waker() noexcept = default;
-    virtual ~Waker();
+    virtual ~Waker() = default;
 
     // Copy.
     Waker(const Waker&) noexcept = default;

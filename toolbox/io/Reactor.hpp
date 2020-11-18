@@ -23,156 +23,88 @@
 #include <toolbox/io/Waker.hpp>
 #include <toolbox/io/Timer.hpp>
 #include <toolbox/io/State.hpp>
+#include <toolbox/io/Handle.hpp>
+#include <toolbox/io/Runner.hpp>
+
 namespace toolbox {
 inline namespace io {
 
 constexpr Duration NoTimeout{-1};
 enum class Priority { High = 0, Low = 1 };
 
-using IoSlot = BasicSlot<CyclTime, int, unsigned>;
 
-class TOOLBOX_API Reactor : public Waker {
-  public:
-    using Event = EpollEvent;
 
-    using StateChangedSignal = toolbox::util::Signal<Reactor*, State>;
-    class Handle {
-      public:
-        Handle(Reactor& reactor, int fd, int sid)
-        : reactor_{&reactor}
-        , fd_{fd}
-        , sid_{sid}
-        {
-        }
-        constexpr Handle(std::nullptr_t = nullptr) noexcept {}
-        ~Handle() { reset(); }
 
-        // Copy.
-        Handle(const Handle&) = delete;
-        Handle& operator=(const Handle&) = delete;
+template<typename PollerT>
+class BasicReactor : public Waker {
+public:
+    //using Event = EpollEvent;
+    using Handle = Epoll::Handle;
+    using FD = typename PollerT::FD;
 
-        // Move.
-        Handle(Handle&& rhs) noexcept
-        : reactor_{rhs.reactor_}
-        , fd_{rhs.fd_}
-        , sid_{rhs.sid_}
-        {
-            rhs.reactor_ = nullptr;
-            rhs.fd_ = -1;
-            rhs.sid_ = 0;
-        }
-        Handle& operator=(Handle&& rhs) noexcept
-        {
-            reset();
-            swap(rhs);
-            return *this;
-        }
-        bool empty() const noexcept { return reactor_ == nullptr; }
-        explicit operator bool() const noexcept { return reactor_ != nullptr; }
-        auto fd() const noexcept { return fd_; }
-        auto sid() const noexcept { return sid_; }
+    using StateChangedSignal = toolbox::util::Signal<BasicReactor*, State>;
+    
 
-        void reset(std::nullptr_t = nullptr) noexcept
-        {
-            if (reactor_) {
-                reactor_->unsubscribe(fd_, sid_);
-                reactor_ = nullptr;
-                fd_ = -1;
-                sid_ = 0;
-            }
-        }
-        void swap(Handle& rhs) noexcept
-        {
-            std::swap(reactor_, rhs.reactor_);
-            std::swap(fd_, rhs.fd_);
-            std::swap(sid_, rhs.sid_);
-        }
+    template<typename...ArgsT>
+    explicit BasicReactor(ArgsT...args)
+    : poller_(std::forward<ArgsT>(args)...)
+    {}
 
-        /// Modify IO event subscription.
-        void set_events(unsigned events, IoSlot slot, std::error_code& ec) noexcept
-        {
-            assert(reactor_);
-            reactor_->set_events(fd_, sid_, events, slot, ec);
-        }
-        void set_events(unsigned events, IoSlot slot)
-        {
-            assert(reactor_);
-            reactor_->set_events(fd_, sid_, events, slot);
-        }
-        void set_events(unsigned events, std::error_code& ec) noexcept
-        {
-            assert(reactor_);
-            reactor_->set_events(fd_, sid_, events, ec);
-        }
-        void set_events(unsigned events)
-        {
-            assert(reactor_);
-            reactor_->set_events(fd_, sid_, events);
-        }
-
-      private:
-        Reactor* reactor_{nullptr};
-        int fd_{-1}, sid_{0};
-    };
-
-    explicit Reactor(std::size_t size_hint = 0);
-    ~Reactor();
+    ~BasicReactor() {}
 
     // Copy.
-    Reactor(const Reactor&) = delete;
-    Reactor& operator=(const Reactor&) = delete;
+    BasicReactor(const BasicReactor&) = delete;
+    BasicReactor& operator=(const BasicReactor&) = delete;
 
     // Move.
-    Reactor(Reactor&&) = delete;
-    Reactor& operator=(Reactor&&) = delete;
+    BasicReactor(BasicReactor&&) = delete;
+    BasicReactor& operator=(BasicReactor&&) = delete;
 
-    // clang-format off
-    [[nodiscard]] Handle subscribe(int fd, unsigned events, IoSlot slot);
-
+    PollerT& poller() { return poller_; }
+    
     /// Throws std::bad_alloc only.
-    [[nodiscard]] Timer timer(MonoTime expiry, Duration interval, Priority priority, TimerSlot slot)
-    {
+    [[nodiscard]] Timer timer(MonoTime expiry, Duration interval, Priority priority, TimerSlot slot) {
         return tqs_[static_cast<size_t>(priority)].insert(expiry, interval, slot);
     }
     /// Throws std::bad_alloc only.
-    [[nodiscard]] Timer timer(MonoTime expiry, Priority priority, TimerSlot slot)
-    {
+    [[nodiscard]] Timer timer(MonoTime expiry, Priority priority, TimerSlot slot) {
         return tqs_[static_cast<size_t>(priority)].insert(expiry, slot);
     }
-    // clang-format on
 
-    void add_hook(Hook& hook) noexcept { hooks_.push_back(hook); }
+    // clang-format off
+    [[nodiscard]] 
+    Handle subscribe(FD fd, IoEvent events, IoSlot slot) {
+      return poller_.subscribe(fd, events, slot);
+    }
+  
     int poll(CyclTime now, Duration timeout = NoTimeout);
+
+    // clang-format on
+    void add_hook(Hook& hook) noexcept { hooks_.push_back(hook); }
+    
     static constexpr long BusyWaitCycles{100};
     void run(std::size_t busy_cycles = BusyWaitCycles);
-    void stop();
+    void stop() {
+      if(state()!=State::Stopping && state()!=State::Stopped) {
+          state(State::Stopping);
+          stop_.store(true, std::memory_order_release);
+      }
+    }
     StateChangedSignal& state_changed() noexcept { return state_changed_; }
     State state() const noexcept { return state_; }
     void state(State val) noexcept { state_.store(val, std::memory_order_release); state_changed().invoke(this, val); }
-  protected:
+protected:
     /// Thread-safe.
-    void do_wakeup() noexcept final;
+    void do_wakeup() noexcept final { poller_.do_wakeup(); }
 
-  private:
+private:
     MonoTime next_expiry(MonoTime next) const;
+    
+    PollerT poller_;
 
-    int dispatch(CyclTime now, Event* buf, int size);
-    void set_events(int fd, int sid, unsigned events, IoSlot slot, std::error_code& ec) noexcept;
-    void set_events(int fd, int sid, unsigned events, IoSlot slot);
-    void set_events(int fd, int sid, unsigned events, std::error_code& ec) noexcept;
-    void set_events(int fd, int sid, unsigned events);
-    void unsubscribe(int fd, int sid) noexcept;
-
-    struct Data {
-        int sid{};
-        unsigned events{};
-        IoSlot slot;
-    };
-    Epoll epoll_;
-    std::vector<Data> data_;
-    EventFd notify_{0, EFD_NONBLOCK};
     static_assert(static_cast<int>(Priority::High) == 0);
     static_assert(static_cast<int>(Priority::Low) == 1);
+
     TimerPool tp_;
     std::array<TimerQueue, 2> tqs_{tp_, tp_};
     HookList hooks_;
@@ -180,6 +112,93 @@ class TOOLBOX_API Reactor : public Waker {
     StateChangedSignal state_changed_;
     std::atomic<State> state_{State::Stopped};
 };
+
+template<typename PollerT>
+inline int BasicReactor<PollerT>::poll(CyclTime now, Duration timeout)
+{
+    enum { High = 0, Low = 1 };
+    using namespace std::chrono;
+
+    // If timeout is zero then the wait_until time should also be zero to signify no wait.
+    MonoTime wait_until{};
+    if (!is_zero(timeout) && hooks_.empty()) {
+        const MonoTime next
+            = next_expiry(timeout == NoTimeout ? MonoClock::max() : now.mono_time() + timeout);
+        if (next > now.mono_time()) {
+            wait_until = next;
+        }
+    }
+
+    int n;
+    std::error_code ec;
+    if (wait_until < MonoClock::max()) {
+        // The wait function will not block if time is zero.
+        n = poller_.poll(wait_until, ec);
+    } else {
+        // Block indefinitely.
+        n = poller_.poll(ec);
+    }
+    if (ec) {
+        if (ec.value() != EINTR) {
+            throw std::system_error{ec};
+        }
+        return 0;
+    }
+    // If the epoller call was a blocking call, then acquire the current time.
+    if (!is_zero(wait_until)) {
+        now = CyclTime::now();
+    }
+    n = tqs_[High].dispatch(now) + poller_.dispatch(now);
+    // Low priority timers are only dispatched during empty cycles.
+    if (n == 0) {
+        n += tqs_[Low].dispatch(now);
+    }
+    io::dispatch(now, hooks_);
+    return n;
+}
+
+template<typename PollerT>
+void BasicReactor<PollerT>::run(std::size_t busy_cycles)
+{
+    state(State::Starting);
+    state(State::Started);
+    std::size_t i{0};
+    while (!stop_.load(std::memory_order_acquire)) {
+        // Busy-wait for a small number of cycles after work was done.
+        if (poll(CyclTime::now(), i++ < busy_cycles ? 0s : NoTimeout) > 0) {
+            // Reset counter when work has been done.
+            i = 0;
+        }
+    }
+    state(State::Stopping);
+    state(State::Stopped);
+}
+
+template<typename PollerT>
+inline MonoTime BasicReactor<PollerT>::next_expiry(MonoTime next) const
+{
+    enum { High = 0, Low = 1 };
+    using namespace std::chrono;
+    {
+        auto& tq = tqs_[High];
+        if (!tq.empty()) {
+            // Duration until next expiry. Mitigate scheduler latency by preempting the
+            // high-priority timer and busy-waiting for 200us ahead of timer expiry.
+            next = min(next, tq.front().expiry() - 200us);
+        }
+    }
+    {
+        auto& tq = tqs_[Low];
+        if (!tq.empty()) {
+            // Duration until next expiry.
+            next = min(next, tq.front().expiry());
+        }
+    }
+    return next;
+}
+
+using Reactor = BasicReactor<Epoll>;
+using ReactorRunner = BasicRunner<Reactor>;
 
 } // namespace io
 } // namespace toolbox

@@ -19,37 +19,10 @@
 #include "Reactor.hpp"
 
 #include <toolbox/sys/Log.hpp>
-#include <toolbox/sys/Signal.hpp>
+
 
 namespace toolbox {
 inline namespace io {
-
-void run_reactor_thread(Reactor& r, ThreadConfig config)
-{
-    sig_block_all();
-    try {
-        set_thread_attrs(config);
-        TOOLBOX_NOTICE << "started " << config.name << " thread";
-        r.run();
-    } catch (const std::exception& e) {
-        TOOLBOX_CRIT << "exception: " << e.what();
-        kill(getpid(), SIGTERM);
-    }
-    TOOLBOX_NOTICE << "stopping " << config.name << " thread";
-}
-
-ReactorRunner::ReactorRunner(Reactor& r, ThreadConfig config)
-: reactor_{r}
-, thread_{run_reactor_thread, std::ref(r), config}
-{
-}
-
-ReactorRunner::~ReactorRunner()
-{
-    reactor_.stop();
-    reactor_.wakeup();
-    thread_.join();
-}
 
 // Wait for termination.
 void wait_termination_signal() {

@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "toolbox/io/Handle.hpp"
 #include <toolbox/io.hpp>
 #include <toolbox/net.hpp>
 #include <toolbox/sys.hpp>
@@ -53,10 +54,10 @@ class EchoConn {
 
   private:
     ~EchoConn() = default;
-    void on_input(CyclTime now, int fd, unsigned events)
+    void on_input(CyclTime now, os::FD fd, IoEvent events)
     {
         try {
-            if (events & (EpollIn | EpollHup)) {
+            if (reactor_.poller().can_read(events)) {
                 const auto size = os::read(fd, buf_.prepare(2944));
                 if (size == 0) {
                     dispose(now);

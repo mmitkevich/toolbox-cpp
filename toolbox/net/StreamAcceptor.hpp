@@ -17,6 +17,7 @@
 #ifndef TOOLBOX_NET_STREAMACCEPTOR_HPP
 #define TOOLBOX_NET_STREAMACCEPTOR_HPP
 
+#include "toolbox/io/Handle.hpp"
 #include <toolbox/io/Event.hpp>
 #include <toolbox/io/Reactor.hpp>
 #include <toolbox/net/StreamSock.hpp>
@@ -51,7 +52,7 @@ class StreamAcceptor {
     ~StreamAcceptor() = default;
 
   private:
-    void on_io_event(CyclTime now, int fd, unsigned events)
+    void on_io_event(CyclTime now, os::FD fd, IoEvent events)
     {
         Endpoint ep;
         IoSock sock{os::accept(fd, ep), serv_.family()};
