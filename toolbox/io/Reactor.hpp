@@ -16,105 +16,115 @@
 
 #ifndef TOOLBOX_IO_REACTOR_HPP
 #define TOOLBOX_IO_REACTOR_HPP
-#include <atomic>
+#include "toolbox/io/Handle.hpp"
+#include <cstdint>
+#include <system_error>
+#include <toolbox/io/Scheduler.hpp>
+#include <toolbox/sys/Error.hpp>
 #include <toolbox/io/Epoll.hpp>
 #include <toolbox/io/EventFd.hpp>
-#include <toolbox/io/Hook.hpp>
-#include <toolbox/io/Waker.hpp>
-#include <toolbox/io/Timer.hpp>
-#include <toolbox/io/State.hpp>
-#include <toolbox/io/Handle.hpp>
 #include <toolbox/io/Runner.hpp>
+#include <toolbox/ipc/MagicRingBuffer.hpp>
+#include <utility>
+#include <toolbox/util/Tuple.hpp>
 
 namespace toolbox {
 inline namespace io {
 
-constexpr Duration NoTimeout{-1};
-enum class Priority { High = 0, Low = 1 };
 
-
-
-
-template<typename PollerT>
-class BasicReactor : public Waker {
+template<typename...PollersT >
+class BasicReactor : public Scheduler, public Waker {
 public:
-    //using Event = EpollEvent;
-    using Handle = Epoll::Handle;
-    using FD = typename PollerT::FD;
+    using This = BasicReactor<PollersT...>;
+    using Base = Scheduler;
+    using Handle = PollHandle;
 
-    using StateChangedSignal = toolbox::util::Signal<BasicReactor*, State>;
-    
+    static_assert(sizeof...(PollersT)>0, "at least one Poller required");
 
+    static constexpr unsigned FDLimit = 0x80000; // per poller
+
+    static constexpr FD CustomFDMask = (1U<<31);  // high bit means custom fd
+public:
     template<typename...ArgsT>
     explicit BasicReactor(ArgsT...args)
-    : poller_(std::forward<ArgsT>(args)...)
+    : pollers_(std::forward<ArgsT>(args)...)                                        // data
     {}
-
-    ~BasicReactor() {}
-
-    // Copy.
-    BasicReactor(const BasicReactor&) = delete;
-    BasicReactor& operator=(const BasicReactor&) = delete;
-
-    // Move.
-    BasicReactor(BasicReactor&&) = delete;
-    BasicReactor& operator=(BasicReactor&&) = delete;
-
-    PollerT& poller() { return poller_; }
-    
-    /// Throws std::bad_alloc only.
-    [[nodiscard]] Timer timer(MonoTime expiry, Duration interval, Priority priority, TimerSlot slot) {
-        return tqs_[static_cast<size_t>(priority)].insert(expiry, interval, slot);
+/*
+    FD ringbuf(const char* path) {
+        rbs_.emplace_back(path);
+        return rbs_.size() | FD_MASK;
     }
-    /// Throws std::bad_alloc only.
-    [[nodiscard]] Timer timer(MonoTime expiry, Priority priority, TimerSlot slot) {
-        return tqs_[static_cast<size_t>(priority)].insert(expiry, slot);
+
+    FD ringbuf(FileHandle&& fd) {
+        rbs_.emplace_back(fd);
+        return rbs_.size() | FD_MASK;
+    }
+
+    ssize_t read(FD fd, void* buf, std::size_t len, std::error_code& ec) noexcept {
+        std::size_t index = -1;
+        FDType fdt = fdtype(fd, index, ec);
+        switch(fdt) {
+            case FDType::MagicRingBuf:
+                return (ssize_t) rbs_[index].write(buf, len);
+            case FDType::Native:
+                return os::read(fd, buf, len, ec);
+            default:
+                return -1;
+        } 
+    }
+
+    ssize_t write(FD fd, void* buf, std::size_t len, std::error_code& ec) noexcept {
+        std::size_t index = -1;
+        FDType fdt = fdtype(fd, index, ec);
+        switch(fdt) {
+            case FDType::MagicRingBuf:
+                return (ssize_t) rbs_[index].read(buf, len);
+            case FDType::Native:
+                return os::read(fd, buf, len, ec);
+            default:
+                return -1;
+        } 
+    }*/
+
+    IPoller* poller(FD fd) {
+        // high bit set in FD means this is custom poller
+        constexpr std::size_t PollersSize = sizeof...(PollersT);
+        if(!(fd & CustomFDMask)) {
+            return static_cast<IPoller*>(tuple_addressof(pollers_, PollersSize-1));    // last poller assumed as "system"
+        }
+        std::size_t i = fd & (~CustomFDMask);
+        std::size_t poller_index = i / FDLimit;
+        std::size_t poller_fd = i % FDLimit;
+        if(poller_index>=PollersSize)
+            return nullptr;
+        return static_cast<IPoller*>(tuple_addressof(pollers_, poller_index));
     }
 
     // clang-format off
     [[nodiscard]] 
-    Handle subscribe(FD fd, IoEvent events, IoSlot slot) {
-      return poller_.subscribe(fd, events, slot);
+    Handle subscribe(FD fd, PollEvents events, IoSlot slot) {
+        IPoller* pollr = poller(fd);
+        if(!pollr)
+            throw std::system_error(std::make_error_code(std::errc::bad_file_descriptor));
+        return pollr->subscribe(fd, events, slot);
     }
   
     int poll(CyclTime now, Duration timeout = NoTimeout);
-
-    // clang-format on
-    void add_hook(Hook& hook) noexcept { hooks_.push_back(hook); }
     
     static constexpr long BusyWaitCycles{100};
     void run(std::size_t busy_cycles = BusyWaitCycles);
-    void stop() {
-      if(state()!=State::Stopping && state()!=State::Stopped) {
-          state(State::Stopping);
-          stop_.store(true, std::memory_order_release);
-      }
-    }
-    StateChangedSignal& state_changed() noexcept { return state_changed_; }
-    State state() const noexcept { return state_; }
-    void state(State val) noexcept { state_.store(val, std::memory_order_release); state_changed().invoke(this, val); }
 protected:
     /// Thread-safe.
-    void do_wakeup() noexcept final { poller_.do_wakeup(); }
+    void do_wakeup() noexcept final { std::get<sizeof...(PollersT)-1>(pollers_).do_wakeup(); }
 
 private:
-    MonoTime next_expiry(MonoTime next) const;
-    
-    PollerT poller_;
-
-    static_assert(static_cast<int>(Priority::High) == 0);
-    static_assert(static_cast<int>(Priority::Low) == 1);
-
-    TimerPool tp_;
-    std::array<TimerQueue, 2> tqs_{tp_, tp_};
-    HookList hooks_;
-    std::atomic<bool> stop_{false};
-    StateChangedSignal state_changed_;
-    std::atomic<State> state_{State::Stopped};
+    std::tuple<PollersT...> pollers_;
+    std::array<IPoller*, sizeof...(PollersT)> ipollers_;
 };
 
-template<typename PollerT>
-inline int BasicReactor<PollerT>::poll(CyclTime now, Duration timeout)
+
+template<typename...PollersT>
+inline int BasicReactor<PollersT...>::poll(CyclTime now, Duration timeout)
 {
     enum { High = 0, Low = 1 };
     using namespace std::chrono;
@@ -122,43 +132,48 @@ inline int BasicReactor<PollerT>::poll(CyclTime now, Duration timeout)
     // If timeout is zero then the wait_until time should also be zero to signify no wait.
     MonoTime wait_until{};
     if (!is_zero(timeout) && hooks_.empty()) {
-        const MonoTime next
-            = next_expiry(timeout == NoTimeout ? MonoClock::max() : now.mono_time() + timeout);
+        const MonoTime next = next_expiry(timeout == NoTimeout ? MonoClock::max() : now.mono_time() + timeout);
         if (next > now.mono_time()) {
             wait_until = next;
         }
     }
-
-    int n;
-    std::error_code ec;
-    if (wait_until < MonoClock::max()) {
-        // The wait function will not block if time is zero.
-        n = poller_.poll(wait_until, ec);
-    } else {
-        // Block indefinitely.
-        n = poller_.poll(ec);
-    }
-    if (ec) {
-        if (ec.value() != EINTR) {
-            throw std::system_error{ec};
+    int rn = 0;
+    std::size_t i = sizeof...(PollersT);
+    tuple_for_each(pollers_, [&](auto &pollr) {
+        i--;
+        int n = 0;
+        std::error_code ec;
+        if(i>0) {
+            n = pollr.wait(MonoTime{}, ec); // no blocking on pollers except last one
+        } else if (wait_until < MonoClock::max()) {
+            // The wait function will not block if time is zero.
+            n = pollr.wait(wait_until, ec);
+        } else {
+            // Block indefinitely.
+            n = pollr.wait(ec);
         }
-        return 0;
-    }
-    // If the epoller call was a blocking call, then acquire the current time.
-    if (!is_zero(wait_until)) {
-        now = CyclTime::now();
-    }
-    n = tqs_[High].dispatch(now) + poller_.dispatch(now);
-    // Low priority timers are only dispatched during empty cycles.
-    if (n == 0) {
-        n += tqs_[Low].dispatch(now);
-    }
+        if (ec) {
+            if (ec.value() != EINTR) {
+                throw std::system_error{ec};
+            }
+        } else {
+            // If the epoller call was a blocking call, then acquire the current time.
+            if (!is_zero(wait_until)) {
+                now = CyclTime::now();
+            }
+            rn += tqs_[High].dispatch(now) + pollr.dispatch(now);
+            // Low priority timers are only dispatched during empty cycles.
+            if (i==0 && n == 0) {
+                rn += tqs_[Low].dispatch(now);
+            }
+        }
+    });
     io::dispatch(now, hooks_);
-    return n;
+    return rn;
 }
 
-template<typename PollerT>
-void BasicReactor<PollerT>::run(std::size_t busy_cycles)
+template<typename... PollersT>
+void BasicReactor<PollersT...>::run(std::size_t busy_cycles)
 {
     state(State::Starting);
     state(State::Started);
@@ -174,28 +189,6 @@ void BasicReactor<PollerT>::run(std::size_t busy_cycles)
     state(State::Stopped);
 }
 
-template<typename PollerT>
-inline MonoTime BasicReactor<PollerT>::next_expiry(MonoTime next) const
-{
-    enum { High = 0, Low = 1 };
-    using namespace std::chrono;
-    {
-        auto& tq = tqs_[High];
-        if (!tq.empty()) {
-            // Duration until next expiry. Mitigate scheduler latency by preempting the
-            // high-priority timer and busy-waiting for 200us ahead of timer expiry.
-            next = min(next, tq.front().expiry() - 200us);
-        }
-    }
-    {
-        auto& tq = tqs_[Low];
-        if (!tq.empty()) {
-            // Duration until next expiry.
-            next = min(next, tq.front().expiry());
-        }
-    }
-    return next;
-}
 
 using Reactor = BasicReactor<Epoll>;
 using ReactorRunner = BasicRunner<Reactor>;

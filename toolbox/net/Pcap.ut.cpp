@@ -18,7 +18,7 @@ std::string to_hex(std::string_view sv) {
 BOOST_AUTO_TEST_SUITE(PcapSuite)
 BOOST_AUTO_TEST_CASE(PcapFile)
 {
-    const char* PCAP_FILE = "./test.pcap";
+    const char* PCAP_FILE = "/opt/tbricks/spb_20201013.pcap";
     TOOLBOX_INFO << "reading "<<PCAP_FILE;
     PcapDevice pcap;
     pcap.input(PCAP_FILE);
@@ -40,7 +40,7 @@ BOOST_AUTO_TEST_CASE(PcapFile)
         ss << pkt.dst().address().to_string() << ":" << pkt.dst().port();
         host_stats[ss.str()]++;
         if(dst_host==filter.host /*&& pkt.dst_port()==dst_port*/) {
-            TOOLBOX_INFO << pkt << " | " << to_hex(std::string_view(pkt.data(), pkt.size()));
+            //TOOLBOX_INFO << pkt << " | " << to_hex(std::string_view(pkt.data(), pkt.size()));
             ++nfound;
         }
     };

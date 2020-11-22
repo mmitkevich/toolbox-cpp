@@ -17,6 +17,7 @@
 #include "toolbox/bm/Suite.hpp"
 #include "toolbox/hdr/Histogram.hpp"
 #include "toolbox/io/Handle.hpp"
+#include "toolbox/io/Poller.hpp"
 #include "toolbox/sys/Log.hpp"
 #include "toolbox/sys/Time.hpp"
 #include <exception>
@@ -46,7 +47,7 @@ class EchoConn {
     , ep_{ep}
     , reactor_(r)
     {
-        sub_ = r.subscribe(sock_.get(), reactor_.poller().read_event(), bind<&EchoConn::on_input>(this));
+        sub_ = r.subscribe(sock_.get(), PollEvents::Read, bind<&EchoConn::on_input>(this));
         tmr_ = r.timer(now.mono_time(), PingInterval, Priority::Low,
                        bind<&EchoConn::on_timer>(this));
     }
@@ -62,10 +63,10 @@ class EchoConn {
     }
   private:
     ~EchoConn() = default;
-    void on_input(CyclTime now, os::FD fd, IoEvent events)
+    void on_input(CyclTime now, os::FD fd, PollEvents events)
     {
         try {
-            if (reactor_.poller().can_read(events)) {
+            if (events & PollEvents::Read) {
                 const auto size = os::read(fd, buf_.prepare(2944));
                 if (size == 0) {
                     dispose(now);

@@ -60,6 +60,30 @@ void tuple_for_each(TupleT& tpl, const FnT& f)
     }
 }
 
+template<typename TupleT, std::size_t ... Is>
+constexpr void* tuple_addressof(TupleT& tpl, std::size_t idx, std::index_sequence<Is...>) {
+    void* ptrs[] = { static_cast<void *>(std::addressof(std::get<Is>(tpl)))... };
+    return ptrs[idx];
+}
+template<typename TupleT>
+constexpr void* tuple_addressof(TupleT& tpl, std::size_t index)
+{
+    return tuple_addressof(tpl, index, std::make_index_sequence<std::tuple_size<TupleT>::value>());
+}
+
+template <typename... ArgsT, std::size_t... Is>
+constexpr std::tuple<ArgsT&...> tuple_refs(std::tuple<ArgsT...>& tuple, std::index_sequence<Is...>)
+{
+    return std::tie(std::get<Is>(tuple)...);
+}
+
+template <typename... ArgsT>
+constexpr std::tuple<ArgsT&...> tuple_refs(std::tuple<ArgsT...>& tuple)
+{
+    return tuple_refs(tuple, std::make_index_sequence<sizeof...(ArgsT)>());
+}
+
+
 } // namespace util
 } // namespace toolbox
 

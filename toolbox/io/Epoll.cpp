@@ -16,11 +16,14 @@
 
 #include "Epoll.hpp"
 #include "toolbox/io/Handle.hpp"
+#include "toolbox/io/Poller.hpp"
+#include "toolbox/util/Exception.hpp"
 #include "toolbox/sys/Log.hpp"
+
 
 using namespace toolbox::io;
 
-Epoll::Handle Epoll::subscribe(FD fd, IoEvent events, IoSlot slot)
+PollHandle Epoll::subscribe(FD fd, PollEvents events, IoSlot slot)
 {
     assert(fd >= 0);
     assert(slot);
@@ -29,68 +32,34 @@ Epoll::Handle Epoll::subscribe(FD fd, IoEvent events, IoSlot slot)
     }
     auto& ref = data_[fd];
     add(fd, ++ref.sid, events);
-    ref.events = (int)events.get();
+    ref.events = events;
     ref.slot = slot;
-    return {*this, fd, ref.sid};
+    return PollHandle(this, fd, ref.sid);
 }
 
-void Epoll::unsubscribe(FD fd, int sid) noexcept
-{
-    auto& ref = data_[fd];
-    if (ref.sid == sid) {
-        del(fd);
-        ref.events = 0;
+void Epoll::unsubscribe(PollHandle& handle) {
+    auto& ref = data_[handle.fd()];
+    if (ref.sid == handle.sid()) {
+        del(handle.fd());
+        ref.events = PollEvents::None;
         ref.slot.reset();
+    }else {
+        throw std::system_error(std::make_error_code(std::errc::invalid_argument));
     }
 }
 
-void Epoll::set_events(FD fd, int sid, unsigned events, IoSlot slot, std::error_code& ec) noexcept
+
+void Epoll::resubscribe(PollHandle& handle, PollEvents events)
 {
-    auto& ref = data_[fd];
-    if (ref.sid == sid) {
+    auto& ref = data_[handle.fd()];
+    if (ref.sid == handle.sid()) {
         if (ref.events != events) {
-            mod(fd, sid, events, ec);
-            if (ec) {
-                return;
-            }
+            mod(handle.fd(), handle.sid(), events);
             ref.events = events;
         }
-        ref.slot = slot;
     }
 }
 
-void Epoll::set_events(FD fd, int sid, unsigned events, IoSlot slot)
-{
-    auto& ref = data_[fd];
-    if (ref.sid == sid) {
-        if (ref.events != events) {
-            mod(fd, sid, events);
-            ref.events = events;
-        }
-        ref.slot = slot;
-    }
-}
-
-void Epoll::set_events(FD fd, int sid, unsigned events, std::error_code& ec) noexcept
-{
-    auto& ref = data_[fd];
-    if (ref.sid == sid && ref.events != events) {
-        mod(fd, sid, events, ec);
-        if (ec) {
-            return;
-        }
-        ref.events = events;
-    }
-}
-
-void Epoll::set_events(FD fd, int sid, unsigned events)
-{
-    auto& ref = data_[fd];
-    if (ref.sid == sid && ref.events != events) {
-        mod(fd, sid, events);
-        ref.events = events;
-    }
-}
 
 int Epoll::dispatch(CyclTime now)
 {
@@ -118,13 +87,13 @@ int Epoll::dispatch(CyclTime now)
         // the events since the call to wait() was made. This would typically happen via a reentrant
         // call into the reactor from an event-handler. N.B. EpollErr and EpollHup are always
         // reported if they occur, regardless of whether they are specified in events.
-        const auto events = ev.events & (ref.events | EpollErr | EpollHup);
+        const uint32_t events = ev.events & (to_epoll_events(ref.events) | EpollErr | EpollHup);
         if (!events) {
             continue;
         }
 
         try {
-            ref.slot(now, fd, events);
+            ref.slot(now, fd, from_epoll_events(events));
         } catch (const std::exception& e) {
             TOOLBOX_ERROR << "error handling io event: " << e.what();
         }

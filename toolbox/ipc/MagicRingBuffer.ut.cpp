@@ -17,7 +17,7 @@ BOOST_AUTO_TEST_CASE(MRBNumeric)
 {
     MagicRingBuffer mrb(PageSize);
     static constexpr std::size_t rec_size = 3;
-    static constexpr std::size_t N = 1'000'000;
+    static constexpr std::size_t N = 10'000;
     std::size_t rtotal {};
     std::size_t nempty {};    
     std::thread runner([&] {
@@ -85,8 +85,8 @@ BOOST_AUTO_TEST_CASE(MRBString)
         while(!stop) {
             if(!mrb.read(0, [&](const char* buf, std::size_t size) noexcept {
                 auto val = std::string_view{buf, size};
-                std::cout << "read="<<val<<std::endl;
-                if(val=="stop")
+                std::cout << "read["<<size<<"]="<<val<<std::endl;
+                if(val.find("stop")!=std::string::npos)
                     stop = true;
                 return size;
             })) {

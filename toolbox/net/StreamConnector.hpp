@@ -68,7 +68,7 @@ class StreamConnector {
                 throw std::system_error{ec, "connect"};
             }
             sub_
-                = r.subscribe(*sock, EpollIn | EpollOut, bind<&StreamConnector::on_io_event>(this));
+                = r.subscribe(*sock, PollEvents::Read | PollEvents::Write, bind<&StreamConnector::on_io_event>(this));
             ep_ = ep;
             sock_ = std::move(sock);
             return false;
@@ -81,7 +81,7 @@ class StreamConnector {
     ~StreamConnector() = default;
 
   private:
-    void on_io_event(CyclTime now, os::FD fd, IoEvent events)
+    void on_io_event(CyclTime now, os::FD fd, PollEvents events)
     {
         IoSock sock{std::move(sock_)};
         sub_.reset();

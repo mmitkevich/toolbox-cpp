@@ -143,7 +143,7 @@ class MagicRingBuffer {
         std::swap(impl_, rhs.impl_);
         std::swap(allocator_, rhs.allocator_);
     }
-    /// Returns false if queue is empty.
+    /// Read at least size bytes or return false
     template <typename FnT>
     bool read(std::size_t size, FnT fn) noexcept
     {
@@ -151,16 +151,18 @@ class MagicRingBuffer {
         auto rpos = impl_->rpos.load(std::memory_order_acquire);
         auto wpos = impl_->wpos.load(std::memory_order_relaxed);
         std::size_t ready = (std::size_t)(wpos-rpos);
-        if(ready<size)
+        if(ready==0 || ready<size)
             return false;
         std::size_t consumed = fn(impl_->buf+(rpos&mask_), ready);  
         impl_->rpos.store(rpos + consumed, std::memory_order_release);
         return true;
     }
-    bool read(void* buf, std::size_t size) noexcept {
-        return read(size, [buf, size](const char* data, std::size_t len) noexcept {
-            std::memcpy(buf, data, size);
-            return size;
+    /// Read available data up to size, return number of bytes read
+    std::size_t read(void* buf, std::size_t size) noexcept {
+        return read(0, [buf, size](const char* data, std::size_t len) noexcept {
+            std::size_t rlen = std::min(size, len);
+            std::memcpy(buf, data, rlen);
+            return rlen;
         });
     }
     template<typename T>
@@ -183,10 +185,10 @@ class MagicRingBuffer {
         return true;
     }
     
-    bool write(const void* buf, std::size_t size) {
+    std::size_t write(const void* buf, std::size_t size) {
         return write(size, [&](void* ptr, std::size_t len) {
             std::memcpy(ptr, buf, len);
-        });
+        }) ? size : 0;
     }
 
     template<typename T>

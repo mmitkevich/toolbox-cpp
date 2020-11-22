@@ -16,6 +16,7 @@
 
 #include "Reactor.hpp"
 #include "toolbox/io/Handle.hpp"
+#include "toolbox/io/Poller.hpp"
 
 #include <toolbox/net/Endpoint.hpp>
 #include <toolbox/net/IoSock.hpp>
@@ -29,7 +30,7 @@ using namespace toolbox;
 namespace {
 
 struct TestHandler : RefCount<TestHandler, ThreadUnsafePolicy> {
-    void on_input(CyclTime now, os::FD fd, IoEvent events)
+    void on_input(CyclTime now, os::FD fd, PollEvents events)
     {
         char buf[4];
         os::recv(fd, buf, 4, 0);
@@ -52,7 +53,7 @@ BOOST_AUTO_TEST_CASE(ReactorLevelCase)
     auto h = make_intrusive<TestHandler>();
 
     auto socks = socketpair(UnixStreamProtocol{});
-    const auto sub = r.subscribe(*socks.second, r.poller().read_event(), bind<&TestHandler::on_input>(h.get()));
+    const auto sub = r.subscribe(*socks.second, PollEvents::Read, bind<&TestHandler::on_input>(h.get()));
 
     const auto now = CyclTime::now();
     BOOST_TEST(r.poll(now, 0ms) == 0);
@@ -84,7 +85,7 @@ BOOST_AUTO_TEST_CASE(ReactorEdgeCase)
     auto h = make_intrusive<TestHandler>();
 
     auto socks = socketpair(UnixStreamProtocol{});
-    auto sub = r.subscribe(*socks.second, EpollIn | EpollEt, bind<&TestHandler::on_input>(h.get()));
+    auto sub = r.subscribe(*socks.second, PollEvents::Read | PollEvents::ET, bind<&TestHandler::on_input>(h.get()));
 
     const auto now = CyclTime::now();
     BOOST_TEST(r.poll(now, 0ms) == 0);
@@ -100,7 +101,7 @@ BOOST_AUTO_TEST_CASE(ReactorEdgeCase)
     BOOST_TEST(h->matches == 1);
 
     // Revert to level-triggered.
-    sub.set_events(EpollIn);
+    sub.resubscribe(PollEvents::Read);
     BOOST_TEST(r.poll(now, 0ms) == 1);
     BOOST_TEST(h->matches == 2);
 

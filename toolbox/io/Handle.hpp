@@ -76,6 +76,8 @@ class BasicHandle {
     constexpr FD get() const noexcept { return id_; }
     constexpr FD operator*() const noexcept { return get(); }
 
+    constexpr bool is_custom() const noexcept { return PolicyT::is_custom(id_); }
+
     FD release() noexcept
     {
         const auto id = id_;
@@ -111,22 +113,14 @@ constexpr bool operator!=(const BasicHandle<PolicyT>& lhs, const BasicHandle<Pol
 
 struct FilePolicy {
     using FD = toolbox::os::FD;
+    static constexpr bool is_custom(FD fd) { return fd<0; }
     static constexpr int invalid() noexcept { return -1; }
     static void close(int d) noexcept { ::close(d); }
 };
 
 using FileHandle = BasicHandle<FilePolicy>;
 
-class IoEvent {
-public:
-    IoEvent(std::uint64_t event)
-    : event_(event) {}
-    std::uint64_t get() const { return event_; }
-private:
-    std::uint64_t event_;
-}; 
 
-using IoSlot = BasicSlot<CyclTime, os::FD, IoEvent>;
 
 } // namespace io
 } // namespace toolbox

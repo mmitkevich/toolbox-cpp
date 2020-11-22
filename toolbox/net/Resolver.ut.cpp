@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(ResolverCase)
 
     auto future4 = res.resolve("bad://foo", SOCK_STREAM);
     BOOST_TEST(res.run() == 1);
-    BOOST_CHECK_THROW(future4.get(), invalid_argument);
+    BOOST_CHECK_THROW(future4.get(), system_error);
 
     auto future5 = res.resolve(uri1, SOCK_STREAM);
     auto future6 = res.resolve(uri2, SOCK_STREAM);

@@ -18,6 +18,7 @@
 #define TOOLBOX_HTTP_CONN_HPP
 
 #include "toolbox/io/Handle.hpp"
+#include "toolbox/io/Poller.hpp"
 #include <toolbox/http/Parser.hpp>
 #include <toolbox/http/Request.hpp>
 #include <toolbox/http/Stream.hpp>
@@ -183,11 +184,11 @@ class BasicHttpConn
         app_.on_http_timeout(now, ep_);
         this->dispose(now);
     }
-    void on_io_event(CyclTime now, os::FD fd, IoEvent events)
+    void on_io_event(CyclTime now, os::FD fd, PollEvents events)
     {
         auto lock = this->lock_this(now);
         try {
-            if (reactor_.poller().can_read(events)) {
+            if (events & PollEvents::Read) {
                 if (!drain_input(now, fd)) {
                     this->dispose(now);
                     return;
@@ -195,7 +196,7 @@ class BasicHttpConn
             }
             // Do not attempt to flush the output buffer if it is empty or if we are still waiting
             // for the socket to become writable.
-            if (out_.empty() || (write_blocked_ && !reactor_.poller().can_write(events))) {
+            if (out_.empty() || (write_blocked_ && !(events & PollEvents::Write))) {
                 return;
             }
             flush_output(now);
@@ -252,12 +253,12 @@ class BasicHttpConn
             }
             if (write_blocked_) {
                 // Restore read-only state after the buffer has been drained.
-                sub_.set_events(EpollIn);
+                sub_.resubscribe(PollEvents::Read);
                 write_blocked_ = false;
             }
         } else if (!write_blocked_) {
             // Set the state to read-write if the entire buffer could not be written.
-            sub_.set_events(EpollIn | EpollOut);
+            sub_.resubscribe(PollEvents::Read | PollEvents::Write);
             write_blocked_ = true;
         }
     }
