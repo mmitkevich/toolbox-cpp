@@ -16,7 +16,7 @@ constexpr Duration NoTimeout{-1};
 enum class Priority { High = 0, Low = 1 };
 
 // event loop base
-class Scheduler {
+class Scheduler : public Waker {
 public:
     using This = Scheduler;
     using FD = os::FD;
@@ -44,7 +44,6 @@ public:
     
     // clang-format on
     void add_hook(Hook& hook) noexcept { hooks_.push_back(hook); }
-    
 
     void stop() {
       if(state()!=State::Stopping && state()!=State::Stopped) {
@@ -78,7 +77,8 @@ public:
     auto& state_changed() noexcept { return state_changed_; }
     State state() const noexcept { return state_; }
     void state(State val) noexcept { state_.store(val, std::memory_order_release); state_changed().invoke(this, val); }
-
+protected:
+    void do_wakeup() noexcept override {}
 protected:
     static_assert(static_cast<int>(Priority::High) == 0);
     static_assert(static_cast<int>(Priority::Low) == 1);

@@ -22,6 +22,7 @@
 #include <toolbox/io/Scheduler.hpp>
 #include <toolbox/sys/Error.hpp>
 #include <toolbox/io/Epoll.hpp>
+#include <toolbox/io/Qpoll.hpp>
 #include <toolbox/io/EventFd.hpp>
 #include <toolbox/io/Runner.hpp>
 #include <toolbox/ipc/MagicRingBuffer.hpp>
@@ -33,12 +34,13 @@ inline namespace io {
 
 
 template<typename...PollersT >
-class BasicReactor : public Scheduler, public Waker {
+class BasicReactor : public Scheduler {
 public:
     using This = BasicReactor<PollersT...>;
     using Base = Scheduler;
     using Handle = PollHandle;
-
+    using Runner = BasicRunner<This>;
+    
     static_assert(sizeof...(PollersT)>0, "at least one Poller required");
 
     static constexpr unsigned FDLimit = 0x80000; // per poller
@@ -102,7 +104,7 @@ public:
 
     // clang-format off
     [[nodiscard]] 
-    Handle subscribe(FD fd, PollEvents events, IoSlot slot) {
+    PollHandle subscribe(FD fd, PollEvents events, IoSlot slot) {
         IPoller* pollr = poller(fd);
         if(!pollr)
             throw std::system_error(std::make_error_code(std::errc::bad_file_descriptor));
@@ -111,8 +113,7 @@ public:
   
     int poll(CyclTime now, Duration timeout = NoTimeout);
     
-    static constexpr long BusyWaitCycles{100};
-    void run(std::size_t busy_cycles = BusyWaitCycles);
+    void run();
 protected:
     /// Thread-safe.
     void do_wakeup() noexcept final { std::get<sizeof...(PollersT)-1>(pollers_).do_wakeup(); }
@@ -173,14 +174,14 @@ inline int BasicReactor<PollersT...>::poll(CyclTime now, Duration timeout)
 }
 
 template<typename... PollersT>
-void BasicReactor<PollersT...>::run(std::size_t busy_cycles)
+void BasicReactor<PollersT...>::run()
 {
     state(State::Starting);
     state(State::Started);
     std::size_t i{0};
     while (!stop_.load(std::memory_order_acquire)) {
         // Busy-wait for a small number of cycles after work was done.
-        if (poll(CyclTime::now(), i++ < busy_cycles ? 0s : NoTimeout) > 0) {
+        if (poll(CyclTime::now(), i++ < 100 ? 0s : NoTimeout) > 0) {
             // Reset counter when work has been done.
             i = 0;
         }
@@ -189,9 +190,8 @@ void BasicReactor<PollersT...>::run(std::size_t busy_cycles)
     state(State::Stopped);
 }
 
-
 using Reactor = BasicReactor<Epoll>;
-using ReactorRunner = BasicRunner<Reactor>;
+
 
 } // namespace io
 } // namespace toolbox

@@ -150,7 +150,7 @@ int main(int argc, char* argv[])
 
         // Start service threads.
         pthread_setname_np(pthread_self(), "main");
-        ReactorRunner reactor_runner{reactor, "reactor"s};
+        Reactor::Runner reactor_runner{reactor, "reactor"s};
 
         // Wait for termination.
         SigWait sig_wait;
