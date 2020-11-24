@@ -25,7 +25,6 @@
 #include <toolbox/io/Qpoll.hpp>
 #include <toolbox/io/EventFd.hpp>
 #include <toolbox/io/Runner.hpp>
-#include <toolbox/ipc/MagicRingBuffer.hpp>
 #include <utility>
 #include <toolbox/util/Tuple.hpp>
 

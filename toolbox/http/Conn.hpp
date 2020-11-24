@@ -91,7 +91,7 @@ class BasicHttpConn
         // closed.
         if (!out_.empty()) {
             std::error_code ec;
-            os::write(sock_.get(), out_.data(), ec); // noexcept
+            os::write(sock_.get(), out_.buffer(), ec); // noexcept
         }
         delete this;
     }
@@ -245,7 +245,7 @@ class BasicHttpConn
     void flush_output(CyclTime now)
     {
         // Attempt to flush buffered data.
-        out_.consume(os::write(sock_.get(), out_.data()));
+        out_.consume(os::write(sock_.get(), out_.buffer()));
         if (out_.empty()) {
             if (!in_progress_ && !should_keep_alive()) {
                 this->dispose(now);

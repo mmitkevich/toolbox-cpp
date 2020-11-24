@@ -69,25 +69,38 @@ public:
     const PcapPacket& self() const;
 };
 
-class TOOLBOX_API PcapPacket : public PcapHeader {
+class TOOLBOX_API PcapBuffer {
 public:
-    using Header = PcapHeader;
-public:
-    PcapPacket(const pcap_pkthdr* pkthdr, const u_char* packet);
-    
     // RawData
     const char* data() const;
     std::size_t size() const;
-    std::string_view str() const;
+    PcapPacket& self();
+    const PcapPacket& self() const;
+};
+class TOOLBOX_API PcapPacket : public PcapHeader, public PcapBuffer {
+public:
+    using Header = PcapHeader;
+    using Buffer = PcapBuffer;
+public:
+    PcapPacket(const pcap_pkthdr* pkthdr, const u_char* packet);
 
     // Header
     const PcapHeader& header() const { return *this; }
     PcapHeader& header() { return *this; }
-        
+    
+    // Buffer
+    const PcapBuffer& buffer() const { return *this; }
+    PcapBuffer& buffer() { return *this; }
+    
+    std::string_view str() const { return {buffer().data(), buffer().size()}; }
+
     friend std::ostream& operator<<(std::ostream& os, const PcapPacket& self) {
         return os << "header:"<<self.header() << ",size="<<self.size();
     } 
 protected:
+    const char* data() const;
+    std::size_t size() const;
+
     const struct ether_header* ether_hdr() const;
     const struct ip* ip_hdr() const;
     const struct ip6_hdr* ipv6_hdr() const;
@@ -103,6 +116,7 @@ protected:
     const pcap_pkthdr* pkthdr;
     const u_char* packet;
     friend class PcapHeader;
+    friend class PcapBuffer;
 };
 
 

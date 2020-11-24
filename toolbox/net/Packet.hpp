@@ -6,15 +6,15 @@
 namespace toolbox { inline namespace net {
 
 template<typename EndpointT>
-class Header {
+class PacketHeader {
 public:
     using Endpoint = EndpointT;
 public:
-    Header()
+    PacketHeader()
     {}
-    Header(Endpoint src, Endpoint dst)
+    PacketHeader(Endpoint src, Endpoint dst)
     : src_(src), dst_(dst) {}
-    Header(Endpoint src, Endpoint dst, WallTime recv_ts)
+    PacketHeader(Endpoint src, Endpoint dst, WallTime recv_ts)
     : src_(src), dst_(dst), recv_ts_(recv_ts) {}
     
     const Endpoint& src() const { return src_; }
@@ -23,10 +23,11 @@ public:
     const Endpoint& dst() const { return dst_; }
     void dst(const Endpoint& val) { dst_ = val; }
 
+    // received timestamp (from hardware?)
     const WallTime& recv_timestamp() const { return recv_ts_;}
     void recv_timestamp(const WallTime& val) { recv_ts_ = val;}
     
-    friend std::ostream& operator<<(std::ostream& os, const Header& self) {
+    friend std::ostream& operator<<(std::ostream& os, const PacketHeader& self) {
         return os << "src:'"<<self.src() << "'"
            << ",dst:'"<<self.dst() << "',"
            << ",recv_ts:'"<<self.recv_timestamp()<<"'";
@@ -37,70 +38,63 @@ protected:
     WallTime recv_ts_{};
 };
 
-/// Generic packet with externally stored data and custom header
-template<
-typename HeaderT>
-class BinaryPacket {
+/// Packet = Header + Buffer
+/// Buffer = ConstBuffer | MutableBuffer
+template<typename HeaderT, typename BufferT>
+class Packet {
 public:
     using Header = HeaderT;
+    using Buffer = BufferT;
 public:
-    BinaryPacket(char* data=nullptr, std::size_t size=0)
-    : data_(data)
-    , size_(size) {}
-    
+    constexpr Packet() = default;
+    constexpr Packet(Header&& header, Buffer&& buffer)
+    : header_(header)
+    , buffer_(buffer)
+    {}
+    explicit constexpr Packet(Header&& header)
+    : header_(header)
+    {}
+    explicit constexpr Packet(Buffer&& buffer)
+    : buffer_(buffer)
+    {}  
     // Header
     Header& header() { return header_; }
     const Header& header() const { return header_; }
 
-    // RawBytes
-    char* data() { return data_; }
-    const char* data() const { return data_; }
-    std::size_t size() const { return size_; }
-    std::string_view str() const { return {data_, size_}; }
+    // Buffer
+    Buffer& buffer() { return buffer_; }
+    const Buffer& buffer() const { return buffer_; }
 
-    // Optional    
-    std::string_view value() const { return str(); }
-    bool has_value() const { return true; }
+    // to string_view
+    std::string_view str() const { return {reinterpret_cast<const char*>(buffer().data()), buffer().size()}; }
 protected:
     HeaderT header_;
-    char* data_{nullptr};
-    std::size_t size_{};
+    BufferT buffer_;
 };
 
-/// Typed packet view over arbitrary BinaryPacket
-template<
-typename ValueT,
-typename BinaryPacketT
-> class PacketView
+/// Typed packet view over arbitrary Packet
+template<typename ValueT, typename PacketImplT>
+class PacketView
 {
 public:
-    using BinaryPacket = BinaryPacketT;
-    using Header = typename BinaryPacketT::Header;
+    using PacketImpl = PacketImplT;
+    using Header = typename PacketImpl::Header;
+    using Buffer = typename PacketImpl::Buffer;
     using value_type = ValueT;
 public:
-    TOOLBOX_ALWAYS_INLINE PacketView(const BinaryPacket& impl)
+    TOOLBOX_ALWAYS_INLINE PacketView(const PacketImpl& impl)
     : impl_(impl){}
 
-    // Optional
-    TOOLBOX_ALWAYS_INLINE const value_type& value() const { return *reinterpret_cast<const value_type*>(impl_.data()); }
+    TOOLBOX_ALWAYS_INLINE const value_type& value() const { return *reinterpret_cast<const value_type*>(impl_.buffer().data()); }
     TOOLBOX_ALWAYS_INLINE bool has_value() const { return impl_.size()>=sizeof(value_type); }
-
-    // Pointer
-    TOOLBOX_ALWAYS_INLINE explicit operator const value_type*() {
-        return reinterpret_cast<value_type*>(impl_.data());
-    }
-    TOOLBOX_ALWAYS_INLINE const value_type* operator->() {
-        return reinterpret_cast<value_type*>(impl_.data());
-    }
-
-    // RawBytes
-    TOOLBOX_ALWAYS_INLINE const char* data() const { return impl_.data(); }
-    TOOLBOX_ALWAYS_INLINE std::size_t size() const { return impl_.size(); }
-    TOOLBOX_ALWAYS_INLINE std::string_view str() const { return {data(), size()}; }
 
     // Header
     const Header& header() const { return impl_.header(); }
     Header& header() { return impl_.header(); }
+
+    // Buffer
+    Buffer& buffer() { return impl_.buffer(); }
+    const Buffer& buffer() const { return impl_.buffer(); }
     
     friend std::ostream& operator<<(std::ostream& os, const PacketView& self) {
         os << "header:"<< self.header()
@@ -112,7 +106,7 @@ public:
         return os;
     }
 protected:
-    const BinaryPacket& impl_;
+    const PacketImpl& impl_;
 };
 
 

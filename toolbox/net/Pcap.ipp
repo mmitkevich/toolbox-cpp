@@ -90,10 +90,15 @@ inline std::size_t PcapPacket::len() const
     return pkthdr->len;
 }
 
-inline std::string_view PcapPacket::str() const {
-    return {data(), size()};
+inline const PcapPacket& PcapBuffer::self() const {
+    return *static_cast<const PcapPacket*>(this);
 }
 
+inline PcapPacket& PcapBuffer::self() {
+    return *static_cast<PcapPacket*>(this);
+}
+
+inline const char* PcapBuffer::data() const { return self().data(); }
 inline const char* PcapPacket::data() const
 {
     int ip_p = ip_hdr()->ip_p;
@@ -108,6 +113,7 @@ inline const char* PcapPacket::data() const
     }
 }
 
+inline std::size_t PcapBuffer::size() const { return self().size(); }
 inline std::size_t PcapPacket::size() const
 {
      switch(protocol_family()) {

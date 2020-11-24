@@ -45,10 +45,10 @@ class TOOLBOX_API Buffer {
     Buffer& operator=(Buffer&&) noexcept = default;
 
     /// Returns available data as a buffer.
-    ConstBuffer data() const noexcept { return {rptr(), size()}; }
+    ConstBuffer buffer() const noexcept { return {rptr(), size()}; }
 
     /// Returns slice of available data as a buffer.
-    ConstBuffer data(std::size_t limit) const noexcept { return {rptr(), std::min(limit, size())}; }
+    ConstBuffer buffer(std::size_t limit) const noexcept { return {rptr(), std::min(limit, size())}; }
 
     /// Returns available data as a string view.
     std::string_view str() const noexcept { return {rptr(), size()}; }
@@ -64,6 +64,9 @@ class TOOLBOX_API Buffer {
 
     /// Returns number of bytes available for read.
     std::size_t size() const noexcept { return wpos_ - rpos_; }
+    
+    /// Returns raw data pointer available for read.
+    const void* data() { return rptr(); }
 
     /// Clear buffer.
     void clear() noexcept
