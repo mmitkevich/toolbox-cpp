@@ -51,8 +51,15 @@ class BasicSlot {
     constexpr BasicSlot(BasicSlot&&) noexcept = default;
     constexpr BasicSlot& operator=(BasicSlot&&) noexcept = default;
 
-    TOOLBOX_ALWAYS_INLINE void invoke(ArgsT... args) const { fn_(obj_, std::forward<ArgsT>(args)...); }
-    TOOLBOX_ALWAYS_INLINE void operator()(ArgsT... args) const { fn_(obj_, std::forward<ArgsT>(args)...); }
+    /// Unsafe invoke
+    TOOLBOX_ALWAYS_INLINE void invoke(ArgsT... args) const {
+        fn_(obj_, std::forward<ArgsT>(args)...); 
+    }
+    /// Safe call
+    TOOLBOX_ALWAYS_INLINE void operator()(ArgsT... args) const {
+        if(fn_!=nullptr)
+            fn_(obj_, std::forward<ArgsT>(args)...); 
+    }
     constexpr bool empty() const noexcept { return fn_ == nullptr; }
     constexpr explicit operator bool() const noexcept { return fn_ != nullptr; }
 

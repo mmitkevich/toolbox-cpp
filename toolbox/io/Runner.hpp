@@ -71,7 +71,7 @@ class TOOLBOX_API BasicRunner {
     std::thread thread_;
 };
 
-void wait_termination_signal();
+void TOOLBOX_API wait_termination_signal();
 
 } // namespace io
 } // namespace toolbox

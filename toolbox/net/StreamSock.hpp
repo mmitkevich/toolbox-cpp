@@ -41,8 +41,7 @@ struct StreamSockServ : Sock {
     StreamSockServ() noexcept = default;
 
     // Logically const.
-    void get_sock_name(Endpoint& ep, std::error_code& ec) noexcept
-    {
+    void get_sock_name(Endpoint& ep, std::error_code& ec) noexcept {
         os::getsockname(get(), ep, ec);
     }
     void get_sock_name(Endpoint& ep) { os::getsockname(get(), ep); }
@@ -52,8 +51,7 @@ struct StreamSockServ : Sock {
     void listen(int backlog, std::error_code& ec) noexcept { os::listen(get(), backlog, ec); }
     void listen(int backlog) { os::listen(get(), backlog); }
 
-    IoSock accept(Endpoint& ep, std::error_code& ec) noexcept
-    {
+    IoSock accept(Endpoint& ep, std::error_code& ec) noexcept {
         return IoSock{os::accept(get(), ep, ec), family()};
     }
     IoSock accept(Endpoint& ep) { return IoSock{os::accept(get(), ep), family()}; }
@@ -87,6 +85,9 @@ struct StreamSockClnt : IoSock {
         return os::connect(get(), ep, ec);
     }
     void connect(const Endpoint& ep) { return os::connect(get(), ep); }
+    void set_tcp_no_delay(bool enabled) {
+        net::set_tcp_no_delay(get(), enabled);
+    }
 };
 
 } // namespace net

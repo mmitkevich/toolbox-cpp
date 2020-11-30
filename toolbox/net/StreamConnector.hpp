@@ -68,7 +68,7 @@ class StreamConnector {
                 throw std::system_error{ec, "connect"};
             }
             sub_
-                = r.subscribe(*sock, PollEvents::Read | PollEvents::Write, bind<&StreamConnector::on_io_event>(this));
+                = r.subscribe(*sock, PollEvents::Read + PollEvents::Write, bind<&StreamConnector::on_io_event>(this));
             ep_ = ep;
             sock_ = std::move(sock);
             return false;

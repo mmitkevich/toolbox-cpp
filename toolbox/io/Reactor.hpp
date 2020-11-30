@@ -50,42 +50,6 @@ public:
     explicit BasicReactor(ArgsT...args)
     : pollers_(std::forward<ArgsT>(args)...)                                        // data
     {}
-/*
-    FD ringbuf(const char* path) {
-        rbs_.emplace_back(path);
-        return rbs_.size() | FD_MASK;
-    }
-
-    FD ringbuf(FileHandle&& fd) {
-        rbs_.emplace_back(fd);
-        return rbs_.size() | FD_MASK;
-    }
-
-    ssize_t read(FD fd, void* buf, std::size_t len, std::error_code& ec) noexcept {
-        std::size_t index = -1;
-        FDType fdt = fdtype(fd, index, ec);
-        switch(fdt) {
-            case FDType::MagicRingBuf:
-                return (ssize_t) rbs_[index].write(buf, len);
-            case FDType::Native:
-                return os::read(fd, buf, len, ec);
-            default:
-                return -1;
-        } 
-    }
-
-    ssize_t write(FD fd, void* buf, std::size_t len, std::error_code& ec) noexcept {
-        std::size_t index = -1;
-        FDType fdt = fdtype(fd, index, ec);
-        switch(fdt) {
-            case FDType::MagicRingBuf:
-                return (ssize_t) rbs_[index].read(buf, len);
-            case FDType::Native:
-                return os::read(fd, buf, len, ec);
-            default:
-                return -1;
-        } 
-    }*/
 
     IPoller* poller(FD fd) {
         // high bit set in FD means this is custom poller
@@ -117,9 +81,9 @@ protected:
     /// Thread-safe.
     void do_wakeup() noexcept final { std::get<sizeof...(PollersT)-1>(pollers_).do_wakeup(); }
 
-private:
+protected:
     std::tuple<PollersT...> pollers_;
-    std::array<IPoller*, sizeof...(PollersT)> ipollers_;
+    
 };
 
 

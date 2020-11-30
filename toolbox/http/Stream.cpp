@@ -15,6 +15,7 @@
 // limitations under the License.
 
 #include "Stream.hpp"
+#include "toolbox/http/Request.hpp"
 
 namespace toolbox {
 inline namespace http {
@@ -61,7 +62,7 @@ void HttpStream::commit() noexcept
     buf_.commit();
 }
 
-void HttpStream::reset(HttpStatus status, const char* content_type, NoCache no_cache)
+void HttpStream::http_status(HttpStatus status, const char* content_type, NoCache no_cache)
 {
     buf_.reset();
     toolbox::reset(*this);
@@ -82,6 +83,18 @@ void HttpStream::reset(HttpStatus status, const char* content_type, NoCache no_c
     }
     *this << "\r\n\r\n";
     hcount_ = pcount();
+}
+
+void HttpStream::http_request(HttpMethod method, const std::string& url) {
+    *this << enum_string(method) << ' ' << url << ' ' << " HTTP/1.1\r\n\r\n";
+}
+
+void HttpStream::http_request(HttpMethod method, const std::string& url, const HttpHeaders& headers) {
+    *this << enum_string(method) << ' ' << url << ' ' << " HTTP/1.1\r\n";
+    for(auto&[k,v]:headers) {
+        *this << k << ':' << v << "\r\n";
+    }
+    *this << "\r\n";
 }
 
 } // namespace http

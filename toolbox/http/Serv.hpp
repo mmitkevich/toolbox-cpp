@@ -17,34 +17,31 @@
 #ifndef TOOLBOX_HTTP_SERV_HPP
 #define TOOLBOX_HTTP_SERV_HPP
 
-#include <toolbox/http/App.hpp>
+//#include <toolbox/http/App.hpp>
 #include <toolbox/http/Conn.hpp>
 #include <toolbox/net/StreamAcceptor.hpp>
 
 namespace toolbox {
 inline namespace http {
 
-template <typename ConnT, typename AppT>
-class BasicHttpServ : public StreamAcceptor<BasicHttpServ<ConnT, AppT>> {
-
-    friend StreamAcceptor<BasicHttpServ<ConnT, AppT>>;
-
-    using Conn = ConnT;
-    using App = AppT;
+template <typename ConnT = HttpConn>
+class BasicHttpServ : public StreamAcceptor<BasicHttpServ<ConnT>> {
+    using This = BasicHttpServ<ConnT>;
+    using Base =  StreamAcceptor<This>;
+    friend Base;
     using ConstantTimeSizeOption = boost::intrusive::constant_time_size<false>;
     using MemberHookOption
-        = boost::intrusive::member_hook<Conn, decltype(Conn::list_hook), &Conn::list_hook>;
-    using ConnList = boost::intrusive::list<Conn, ConstantTimeSizeOption, MemberHookOption>;
+        = boost::intrusive::member_hook<ConnT, decltype(ConnT::list_hook), &ConnT::list_hook>;
+    using ConnList = boost::intrusive::list<ConnT, ConstantTimeSizeOption, MemberHookOption>;
 
-    using typename StreamAcceptor<BasicHttpServ<ConnT, AppT>>::Endpoint;
-
+    using typename Base::Endpoint;
   public:
-    BasicHttpServ(CyclTime now, Reactor& r, const Endpoint& ep, App& app)
-    : StreamAcceptor<BasicHttpServ<ConnT, AppT>>{r, ep}
+    using Conn = ConnT;
+  public:
+    BasicHttpServ(CyclTime now, Reactor& r, const Endpoint& ep)
+    : Base {r, ep}
     , reactor_{r}
-    , app_{app}
-    {
-    }
+    {}
     ~BasicHttpServ()
     {
         const auto now = CyclTime::current();
@@ -59,21 +56,26 @@ class BasicHttpServ : public StreamAcceptor<BasicHttpServ<ConnT, AppT>> {
     BasicHttpServ(BasicHttpServ&&) = delete;
     BasicHttpServ& operator=(BasicHttpServ&&) = delete;
 
+    void accept(Slot<CyclTime, Conn&> slot) {
+      accept_ = slot;
+    }
   private:
     void on_sock_prepare(CyclTime now, IoSock& sock) {}
     void on_sock_accept(CyclTime now, IoSock&& sock, const Endpoint& ep)
     {
-        auto* const conn = new Conn{now, reactor_, std::move(sock), ep, app_};
+        Conn* conn = new Conn{now, reactor_, std::move(sock), ep};
         conn_list_.push_back(*conn);
+        if(accept_)
+          accept_(now, *conn);
     }
 
     Reactor& reactor_;
-    App& app_;
     // List of active connections.
     ConnList conn_list_;
+    Slot<CyclTime, Conn&> accept_;
 };
 
-using HttpServ = BasicHttpServ<HttpConn, HttpAppBase>;
+using HttpServ = BasicHttpServ<HttpConn>;
 
 } // namespace http
 } // namespace toolbox

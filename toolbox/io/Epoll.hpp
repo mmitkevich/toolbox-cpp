@@ -18,6 +18,7 @@
 #define TOOLBOX_IO_EPOLL_HPP
 
 #include "toolbox/io/Waker.hpp"
+#include <sstream>
 #include <toolbox/io/Event.hpp>
 #include <toolbox/io/Handle.hpp>
 #include <toolbox/io/TimerFd.hpp>
@@ -25,6 +26,7 @@
 #include <toolbox/util/Slot.hpp>
 #include <toolbox/io/EventFd.hpp>
 #include <toolbox/io/Poller.hpp>
+#include <toolbox/sys/Log.hpp>
 #include <sys/epoll.h>
 
 namespace toolbox {
@@ -260,6 +262,7 @@ class TOOLBOX_API Epoll : public IPoller {
     PollHandle subscribe(FD fd, PollEvents events, IoSlot slot) override;
     void unsubscribe(PollHandle& handle) override;
     void resubscribe(PollHandle& handle, PollEvents events) override;
+    void resubscribe(PollHandle& handle, PollEvents events, IoSlot slot) override;
 
     int dispatch(CyclTime now);
     

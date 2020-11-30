@@ -87,6 +87,7 @@ set(lib_SOURCES
   net/StreamConnector.cpp
   net/StreamSock.cpp
   net/Pcap.cpp
+  net/AsyncStreamSock.cpp
   sys/Daemon.cpp
   sys/Date.cpp
   sys/Error.cpp

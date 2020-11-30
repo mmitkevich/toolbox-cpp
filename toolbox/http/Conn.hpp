@@ -19,6 +19,7 @@
 
 #include "toolbox/io/Handle.hpp"
 #include "toolbox/io/Poller.hpp"
+#include <exception>
 #include <toolbox/http/Parser.hpp>
 #include <toolbox/http/Request.hpp>
 #include <toolbox/http/Stream.hpp>
@@ -28,47 +29,46 @@
 #include <toolbox/net/Endpoint.hpp>
 #include <toolbox/net/IoSock.hpp>
 #include <toolbox/util/MemAlloc.hpp>
-
+#include <toolbox/util/Slot.hpp>
 #include <boost/intrusive/list.hpp>
 
 namespace toolbox {
 inline namespace http {
 class HttpAppBase;
 
-template <typename RequestT, typename AppT>
+template <typename RequestT>
 class BasicHttpConn
 : public MemAlloc
-, public BasicDisposer<BasicHttpConn<RequestT, AppT>>
-, BasicHttpParser<BasicHttpConn<RequestT, AppT>> {
+, public BasicDisposer<BasicHttpConn<RequestT>>
+, BasicHttpParser<BasicHttpConn<RequestT>> {
 
-    friend class BasicDisposer<BasicHttpConn<RequestT, AppT>>;
-    friend class BasicHttpParser<BasicHttpConn<RequestT, AppT>>;
-
+    friend class BasicDisposer<BasicHttpConn<RequestT>>;
+    friend class BasicHttpParser<BasicHttpConn<RequestT>>;
     using Request = RequestT;
-    using App = AppT;
+    using This = BasicHttpConn<RequestT>;
+    using Parser = BasicHttpParser<This>;
     // Automatically unlink when object is destroyed.
     using AutoUnlinkOption = boost::intrusive::link_mode<boost::intrusive::auto_unlink>;
 
     static constexpr auto IdleTimeout = 5s;
 
-    using BasicHttpParser<BasicHttpConn<RequestT, AppT>>::method;
-    using BasicHttpParser<BasicHttpConn<RequestT, AppT>>::parse;
-    using BasicHttpParser<BasicHttpConn<RequestT, AppT>>::should_keep_alive;
+    using Parser::method;
+    using Parser::parse;
+    using Parser::should_keep_alive;
 
   public:
     using Protocol = StreamProtocol;
     using Endpoint = StreamEndpoint;
 
-    BasicHttpConn(CyclTime now, Reactor& r, IoSock&& sock, const Endpoint& ep, App& app)
-    : BasicHttpParser<BasicHttpConn<RequestT, AppT>>{HttpType::Request}
+    BasicHttpConn(CyclTime now, Reactor& r, IoSock&& sock, const Endpoint& ep)
+    : Parser{HttpType::Request}
     , reactor_{r}
     , sock_{std::move(sock)}
     , ep_{ep}
-    , app_{app}
     {
-        sub_ = r.subscribe(*sock_, EpollIn, bind<&BasicHttpConn::on_io_event>(this));
+        sub_ = r.subscribe(*sock_, PollEvents::Read, bind<&BasicHttpConn::on_io_event>(this));
         schedule_timeout(now);
-        app.on_http_connect(now, ep_);
+        on_http_connect(now, ep_);
     }
 
     // Copy.
@@ -83,10 +83,57 @@ class BasicHttpConn
     void clear() noexcept { req_.clear(); }
     boost::intrusive::list_member_hook<AutoUnlinkOption> list_hook;
 
+    void http_connect(Slot<CyclTime, const Endpoint&> slot) {
+        http_connect_ = slot;
+    }
+    void http_disconnect(Slot<CyclTime, const Endpoint&> slot) {
+        http_disconnect_ = slot;
+    }
+    void http_error(Slot<CyclTime, const Endpoint&, std::exception&, HttpStream&> slot) {
+        http_error_ = slot;
+    }
+    void http_timeout(Slot<CyclTime, const Endpoint&> slot) {
+        http_timeout_ = slot;
+    }
+    void http_message(Slot<CyclTime, const Endpoint&, const HttpRequest&, HttpStream&> slot) {
+        http_message_ = slot;
+    }
+
+    void http_request(HttpRequest&& req) {
+        req_ = std::move(req);
+        reqs_.http_request(req.method(), req.url(), req.headers());
+    }
+protected:
+    void on_http_connect(CyclTime now, const Endpoint& ep) {
+        TOOLBOX_INFO << "http_connect, ep:"<<ep;
+        if(http_connect_)
+            http_connect_(now, ep);
+    }
+    
+    void on_http_disconnect(CyclTime now, const Endpoint& ep) {
+        TOOLBOX_INFO << "http_disconnect, ep:"<<ep;
+        if(http_disconnect_)
+            http_disconnect_(now, ep);        
+    }
+    void on_http_error(CyclTime now, const Endpoint& ep, const std::exception& e, HttpStream& os) {
+        TOOLBOX_INFO << "http_error, ep:"<<ep<<", e:"<<e.what();
+        if(http_error_)
+            http_error_(now, ep, e, os);        
+    }
+    void on_http_timeout(CyclTime now, const Endpoint& ep) {
+        TOOLBOX_INFO << "http_timeout, ep:"<<ep;
+        if(http_timeout_)
+            http_timeout_(now, ep);
+    }
+    void on_http_message(CyclTime now, const Endpoint& ep, const HttpRequest& req, HttpStream& os) {
+        TOOLBOX_INFO << "http_message, ep:"<<ep<<", req:"<<req;
+        if(http_message_)
+            http_message_(now, ep, req, os);
+    }
   protected:
     void dispose_now(CyclTime now) noexcept
     {
-        app_.on_http_disconnect(now, ep_); // noexcept
+        on_http_disconnect(now, ep_); // noexcept
         // Best effort to drain any data still pending in the write buffer before the socket is
         // closed.
         if (!out_.empty()) {
@@ -111,7 +158,7 @@ class BasicHttpConn
             req_.append_url(sv);
             ret = true;
         } catch (const std::exception& e) {
-            app_.on_http_error(now, ep_, e, os_);
+            on_http_error(now, ep_, e, resp_);
             this->dispose(now);
         }
         return ret;
@@ -128,7 +175,7 @@ class BasicHttpConn
             req_.append_header_field(sv, first);
             ret = true;
         } catch (const std::exception& e) {
-            app_.on_http_error(now, ep_, e, os_);
+            on_http_error(now, ep_, e, resp_);
             this->dispose(now);
         }
         return ret;
@@ -140,7 +187,7 @@ class BasicHttpConn
             req_.append_header_value(sv, first);
             ret = true;
         } catch (const std::exception& e) {
-            app_.on_http_error(now, ep_, e, os_);
+            on_http_error(now, ep_, e, resp_);
             this->dispose(now);
         }
         return ret;
@@ -157,7 +204,7 @@ class BasicHttpConn
             req_.append_body(sv);
             ret = true;
         } catch (const std::exception& e) {
-            app_.on_http_error(now, ep_, e, os_);
+            on_http_error(now, ep_, e, resp_);
             this->dispose(now);
         }
         return ret;
@@ -168,10 +215,10 @@ class BasicHttpConn
         try {
             in_progress_ = false;
             req_.flush(); // May throw.
-            app_.on_http_message(now, ep_, req_, os_);
+            on_http_message(now, ep_, req_, resp_);
             ret = true;
         } catch (const std::exception& e) {
-            app_.on_http_error(now, ep_, e, os_);
+            on_http_error(now, ep_, e, resp_);
             this->dispose(now);
         }
         return ret;
@@ -181,15 +228,16 @@ class BasicHttpConn
     void on_timeout_timer(CyclTime now, Timer& tmr)
     {
         auto lock = this->lock_this(now);
-        app_.on_http_timeout(now, ep_);
+        on_http_timeout(now, ep_);
         this->dispose(now);
     }
     void on_io_event(CyclTime now, os::FD fd, PollEvents events)
     {
+        assert(fd==sock_.get());
         auto lock = this->lock_this(now);
         try {
             if (events & PollEvents::Read) {
-                if (!drain_input(now, fd)) {
+                if (!drain_input(now, sock_)) {
                     this->dispose(now);
                     return;
                 }
@@ -204,17 +252,17 @@ class BasicHttpConn
             // Do not call on_http_error() here, because it will have already been called in one of
             // the noexcept parser callback functions.
         } catch (const std::exception& e) {
-            app_.on_http_error(now, ep_, e, os_);
+            on_http_error(now, ep_, e, resp_);
             this->dispose(now);
         }
     }
-    bool drain_input(CyclTime now, os::FD fd)
+    bool drain_input(CyclTime now, IoSock& sock)
     {
         // Limit the number of reads to avoid starvation.
         for (int i{0}; i < 4; ++i) {
             std::error_code ec;
             const auto buf = in_.prepare(2944);
-            const auto size = os::read(fd, buf, ec);
+            const auto size = sock.read(buf, ec);
             if (ec) {
                 // No data available in socket buffer.
                 if (ec == std::errc::operation_would_block) {
@@ -241,7 +289,9 @@ class BasicHttpConn
         schedule_timeout(now);
         return true;
     }
-    void flush_input(CyclTime now) { in_.consume(parse(now, in_.data())); }
+    void flush_input(CyclTime now) { 
+        in_.consume(parse(now, in_.buffer())); 
+    }
     void flush_output(CyclTime now)
     {
         // Attempt to flush buffered data.
@@ -258,7 +308,7 @@ class BasicHttpConn
             }
         } else if (!write_blocked_) {
             // Set the state to read-write if the entire buffer could not be written.
-            sub_.resubscribe(PollEvents::Read | PollEvents::Write);
+            sub_.resubscribe(PollEvents::Read + PollEvents::Write);
             write_blocked_ = true;
         }
     }
@@ -271,16 +321,22 @@ class BasicHttpConn
     Reactor& reactor_;
     IoSock sock_;
     Endpoint ep_;
-    App& app_;
     Reactor::Handle sub_;
     Timer tmr_;
     Buffer in_, out_;
     Request req_;
-    HttpStream os_{out_};
+    HttpStream reqs_{in_};
+    HttpStream resp_{out_};
     bool in_progress_{false}, write_blocked_{false};
+
+    Slot<CyclTime, const Endpoint&> http_connect_;
+    Slot<CyclTime, const Endpoint&> http_disconnect_;
+    Slot<CyclTime, const Endpoint&, const std::exception&, HttpStream&> http_error_;
+    Slot<CyclTime, const Endpoint&> http_timeout_;
+    Slot<CyclTime, const Endpoint&, const HttpRequest&, HttpStream&> http_message_;
 };
 
-using HttpConn = BasicHttpConn<HttpRequest, HttpAppBase>;
+using HttpConn = BasicHttpConn<HttpRequest>;
 
 } // namespace http
 } // namespace toolbox

@@ -24,6 +24,8 @@
 namespace toolbox {
 inline namespace http {
 
+using HttpHeaders = std::vector<std::pair<std::string, std::string>>;
+
 constexpr char ApplicationJson[]{"application/json"};
 constexpr char TextHtml[]{"text/html"};
 constexpr char TextPlain[]{"text/plain"};
@@ -34,7 +36,7 @@ class TOOLBOX_API HttpBuf : public std::streambuf {
     : buf_{buf}
     {
     }
-    ~HttpBuf() final;
+    ~HttpBuf();
 
     // Copy.
     HttpBuf(const HttpBuf&) = delete;
@@ -89,8 +91,9 @@ class TOOLBOX_API HttpStream : public std::ostream {
         toolbox::reset(*this);
         cloff_ = hcount_ = 0;
     }
-    void reset(HttpStatus status, const char* content_type, NoCache no_cache = NoCache::Yes);
-
+    void http_status(HttpStatus status, const char* content_type, NoCache no_cache = NoCache::Yes);
+    void http_request(HttpMethod method, const std::string& url);
+    void http_request(HttpMethod method, const std::string& url, const HttpHeaders& headers);
   private:
     HttpBuf buf_;
     /// Content-Length offset.

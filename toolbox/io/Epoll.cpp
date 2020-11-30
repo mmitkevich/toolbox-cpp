@@ -60,6 +60,18 @@ void Epoll::resubscribe(PollHandle& handle, PollEvents events)
     }
 }
 
+void Epoll::resubscribe(PollHandle& handle, PollEvents events, IoSlot slot)
+{
+    auto& ref = data_[handle.fd()];
+    if (ref.sid == handle.sid()) {
+        ref.slot = slot;
+        if (ref.events != events) {
+            mod(handle.fd(), handle.sid(), events);
+            ref.events = events;
+        }
+    }
+}
+
 
 int Epoll::dispatch(CyclTime now)
 {

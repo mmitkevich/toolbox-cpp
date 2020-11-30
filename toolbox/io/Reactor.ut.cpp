@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(ReactorEdgeCase)
     auto h = make_intrusive<TestHandler>();
 
     auto socks = socketpair(UnixStreamProtocol{});
-    auto sub = r.subscribe(*socks.second, PollEvents::Read | PollEvents::ET, bind<&TestHandler::on_input>(h.get()));
+    auto sub = r.subscribe(*socks.second, PollEvents::Read + PollEvents::ET, bind<&TestHandler::on_input>(h.get()));
 
     const auto now = CyclTime::now();
     BOOST_TEST(r.poll(now, 0ms) == 0);

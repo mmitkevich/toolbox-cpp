@@ -17,6 +17,7 @@
 #ifndef TOOLBOX_HTTP_REQUEST_HPP
 #define TOOLBOX_HTTP_REQUEST_HPP
 
+#include "toolbox/http/Stream.hpp"
 #include <toolbox/http/Types.hpp>
 #include <toolbox/http/Url.hpp>
 
@@ -25,7 +26,6 @@
 namespace toolbox {
 inline namespace http {
 
-using HttpHeaders = std::vector<std::pair<std::string, std::string>>;
 
 class TOOLBOX_API HttpRequest : public BasicUrl<HttpRequest> {
   public:
@@ -75,6 +75,15 @@ class TOOLBOX_API HttpRequest : public BasicUrl<HttpRequest> {
     HttpHeaders headers_;
     std::string body_;
 };
+
+inline std::ostream& operator<<(std::ostream& os, const HttpRequest& req) {
+    os << enum_string(req.method()) << ", url=" << req.url();
+    for(auto&[k,v]: req.headers()) {
+        os << ", hdr: "<< k << ":" << v;
+    }
+    return os;
+}
+
 } // namespace http
 } // namespace toolbox
 

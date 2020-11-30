@@ -33,7 +33,7 @@ void write(Buffer& buf, const char* data)
 
 string read(Buffer& buf)
 {
-    const auto in = buf.data();
+    const auto in = buf.buffer();
     const string s{buffer_cast<const char*>(in), buffer_size(in)};
     buf.consume(buffer_size(in));
     return s;
@@ -41,7 +41,7 @@ string read(Buffer& buf)
 
 string read(Buffer& buf, std::size_t limit)
 {
-    const auto in = buf.data(limit);
+    const auto in = buf.buffer(limit);
     const string s{buffer_cast<const char*>(in), buffer_size(in)};
     buf.consume(buffer_size(in));
     return s;
@@ -56,36 +56,36 @@ BOOST_AUTO_TEST_CASE(ReadWriteCase)
     Buffer buf;
     BOOST_TEST(buf.empty());
     BOOST_TEST(buf.size() == 0U);
-    BOOST_TEST(buffer_size(buf.data()) == 0U);
+    BOOST_TEST(buffer_size(buf.buffer()) == 0U);
 
     write(buf, "foo");
     BOOST_TEST(!buf.empty());
     BOOST_TEST(buf.size() == 3U);
-    BOOST_TEST(buffer_size(buf.data()) == 3U);
-    BOOST_TEST(memcmp(buffer_cast<const char*>(buf.data()), "foo", 3) == 0);
+    BOOST_TEST(buffer_size(buf.buffer()) == 3U);
+    BOOST_TEST(memcmp(buffer_cast<const char*>(buf.buffer()), "foo", 3) == 0);
 
     write(buf, "bar");
     BOOST_TEST(!buf.empty());
     BOOST_TEST(buf.size() == 6U);
-    BOOST_TEST(buffer_size(buf.data()) == 6U);
-    BOOST_TEST(memcmp(buffer_cast<const char*>(buf.data()), "foobar", 6) == 0);
+    BOOST_TEST(buffer_size(buf.buffer()) == 6U);
+    BOOST_TEST(memcmp(buffer_cast<const char*>(buf.buffer()), "foobar", 6) == 0);
 
     BOOST_TEST(read(buf, 4) == "foob");
     BOOST_TEST(!buf.empty());
     BOOST_TEST(buf.size() == 2U);
-    BOOST_TEST(buffer_size(buf.data()) == 2U);
-    BOOST_TEST(memcmp(buffer_cast<const char*>(buf.data()), "ar", 2) == 0);
+    BOOST_TEST(buffer_size(buf.buffer()) == 2U);
+    BOOST_TEST(memcmp(buffer_cast<const char*>(buf.buffer()), "ar", 2) == 0);
 
     write(buf, "baz");
     BOOST_TEST(!buf.empty());
     BOOST_TEST(buf.size() == 5U);
-    BOOST_TEST(buffer_size(buf.data()) == 5U);
-    BOOST_TEST(memcmp(buffer_cast<const char*>(buf.data()), "arbaz", 5) == 0);
+    BOOST_TEST(buffer_size(buf.buffer()) == 5U);
+    BOOST_TEST(memcmp(buffer_cast<const char*>(buf.buffer()), "arbaz", 5) == 0);
 
     BOOST_TEST(read(buf) == "arbaz");
     BOOST_TEST(buf.empty());
     BOOST_TEST(buf.size() == 0U);
-    BOOST_TEST(buffer_size(buf.data()) == 0U);
+    BOOST_TEST(buffer_size(buf.buffer()) == 0U);
 }
 
 BOOST_AUTO_TEST_CASE(NoShrinkSmallCase)
@@ -95,30 +95,30 @@ BOOST_AUTO_TEST_CASE(NoShrinkSmallCase)
     // Avoid vector reallocation.
     buf.reserve(4096);
     // Base address.
-    const auto* base = buffer_cast<const char*>(buf.data());
+    const auto* base = buffer_cast<const char*>(buf.buffer());
 
     // Simulated write.
     buf.prepare(16);
     buf.commit(16);
     BOOST_TEST(!buf.empty());
     BOOST_TEST(buf.size() == 16U);
-    BOOST_TEST(buffer_size(buf.data()) == 16U);
-    BOOST_TEST(distance(base, buffer_cast<const char*>(buf.data())) == 0);
+    BOOST_TEST(buffer_size(buf.buffer()) == 16U);
+    BOOST_TEST(distance(base, buffer_cast<const char*>(buf.buffer())) == 0);
 
     // Consume less than half.
     buf.consume(7);
     BOOST_TEST(!buf.empty());
     BOOST_TEST(buf.size() == 9U);
-    BOOST_TEST(buffer_size(buf.data()) == 9U);
-    BOOST_TEST(distance(base, buffer_cast<const char*>(buf.data())) == 7);
+    BOOST_TEST(buffer_size(buf.buffer()) == 9U);
+    BOOST_TEST(distance(base, buffer_cast<const char*>(buf.buffer())) == 7);
 
     // Consuming one more should not trigger shrink, because the buffer size is less than the shrink
     // threshold.
     buf.consume(1);
     BOOST_TEST(!buf.empty());
     BOOST_TEST(buf.size() == 8U);
-    BOOST_TEST(buffer_size(buf.data()) == 8U);
-    BOOST_TEST(distance(base, buffer_cast<const char*>(buf.data())) != 0);
+    BOOST_TEST(buffer_size(buf.buffer()) == 8U);
+    BOOST_TEST(distance(base, buffer_cast<const char*>(buf.buffer())) != 0);
 }
 
 BOOST_AUTO_TEST_CASE(ShrinkLargeCase)
@@ -128,30 +128,30 @@ BOOST_AUTO_TEST_CASE(ShrinkLargeCase)
     // Avoid vector reallocation.
     buf.reserve(4096);
     // Base address.
-    const auto* base = buffer_cast<const char*>(buf.data());
+    const auto* base = buffer_cast<const char*>(buf.buffer());
 
     // Simulated write.
     buf.prepare(2048);
     buf.commit(2048);
     BOOST_TEST(!buf.empty());
     BOOST_TEST(buf.size() == 2048U);
-    BOOST_TEST(buffer_size(buf.data()) == 2048U);
-    BOOST_TEST(buffer_cast<const char*>(buf.data()) == base);
+    BOOST_TEST(buffer_size(buf.buffer()) == 2048U);
+    BOOST_TEST(buffer_cast<const char*>(buf.buffer()) == base);
 
     // Consume less than half.
     buf.consume(1023);
     BOOST_TEST(!buf.empty());
     BOOST_TEST(buf.size() == 1025U);
-    BOOST_TEST(buffer_size(buf.data()) == 1025U);
-    BOOST_TEST(buffer_cast<const char*>(buf.data()) == base + 1023);
+    BOOST_TEST(buffer_size(buf.buffer()) == 1025U);
+    BOOST_TEST(buffer_cast<const char*>(buf.buffer()) == base + 1023);
 
     // Consuming one more should not trigger shrink, because the buffer size is less than the shrink
     // threshold.
     buf.consume(1);
     BOOST_TEST(!buf.empty());
     BOOST_TEST(buf.size() == 1024U);
-    BOOST_TEST(buffer_size(buf.data()) == 1024U);
-    BOOST_TEST(buffer_cast<const char*>(buf.data()) == base);
+    BOOST_TEST(buffer_size(buf.buffer()) == 1024U);
+    BOOST_TEST(buffer_cast<const char*>(buf.buffer()) == base);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

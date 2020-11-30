@@ -17,8 +17,22 @@ enum PollEvents: uint32_t {
     ET          = 1U << 31
 };
 
-inline PollEvents operator|(PollEvents lhs, PollEvents rhs) {
+inline PollEvents operator+(PollEvents lhs, PollEvents rhs) {
     return static_cast<PollEvents>(unbox(lhs) | unbox(rhs));
+}
+
+inline PollEvents operator-(PollEvents lhs, PollEvents rhs) {
+    return static_cast<PollEvents>(unbox(lhs) & ~unbox(rhs));
+}
+
+inline std::ostream& operator<<(std::ostream& os, PollEvents val) {
+    os << "\"";
+    if(val & PollEvents::Read)
+        os << " Read";
+    if(val & PollEvents::Write)
+        os <<" Write";
+    os << "\"";
+    return os;
 }
 
 struct FDS {
@@ -105,6 +119,7 @@ public:
     explicit operator bool() const noexcept { return poller_ != nullptr; }
 
     void resubscribe(PollEvents events);
+    void resubscribe(PollEvents events, IoSlot slot);
 protected:
     IPoller *poller_ {nullptr};
 };
@@ -116,6 +131,7 @@ public:
     virtual PollHandle subscribe(int fd, PollEvents events, IoSlot slot) = 0;
     virtual void unsubscribe(PollHandle& handle) = 0;
     virtual void resubscribe(PollHandle& handle, PollEvents events) = 0;    
+    virtual void resubscribe(PollHandle& handle, PollEvents events, IoSlot slot) = 0;    
 };
 
 
@@ -131,6 +147,10 @@ inline void PollHandle::reset(std::nullptr_t) noexcept
 
 inline void PollHandle::resubscribe(PollEvents events) {
     poller_->resubscribe(*this, events);
+} 
+
+inline void PollHandle::resubscribe(PollEvents events, IoSlot slot) {
+    poller_->resubscribe(*this, events, slot);
 } 
 
 
