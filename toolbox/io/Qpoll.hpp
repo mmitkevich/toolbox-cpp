@@ -1,12 +1,12 @@
 #pragma once
-#include "toolbox/io/Poller.hpp"
+#include "toolbox/io/ReactorHandle.hpp"
 #include <toolbox/ipc/MagicRingBuffer.hpp>
 
 namespace toolbox {
 inline namespace io {
 
 template<typename QueueT> 
-class BasicQueuePoll : public IPoller {
+class BasicQueuePoll : public IReactor {
 public:
     os::FD add(QueueT& queue, PollEvents events=PollEvents::None) {
         data_.emplace_back({&queue, events});
@@ -26,6 +26,7 @@ public:
         std::size_t i = (std::size_t) fd;
         assert(i<data_.size());
         data_[i].events = events;
+        return PollHandle{this, fd, 0};
     }
     void unsubscribe(PollHandle& handle) override {
         del(handle.fd());

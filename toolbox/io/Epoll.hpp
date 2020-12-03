@@ -25,7 +25,7 @@
 #include <toolbox/sys/Error.hpp>
 #include <toolbox/util/Slot.hpp>
 #include <toolbox/io/EventFd.hpp>
-#include <toolbox/io/Poller.hpp>
+#include <toolbox/io/ReactorHandle.hpp>
 #include <toolbox/sys/Log.hpp>
 #include <sys/epoll.h>
 
@@ -163,7 +163,7 @@ using EpollEvent = epoll_event;
 
 
 /// This is Epoll reactor implementation
-class TOOLBOX_API Epoll : public IPoller {
+class TOOLBOX_API Epoll {
   public:
     using Event = EpollEvent;
     using This = Epoll;
@@ -257,16 +257,15 @@ class TOOLBOX_API Epoll : public IPoller {
         return ready_;
     }
     
-    // clang-format off
-    [[nodiscard]] 
-    PollHandle subscribe(FD fd, PollEvents events, IoSlot slot) override;
-    void unsubscribe(PollHandle& handle) override;
-    void resubscribe(PollHandle& handle, PollEvents events) override;
-    void resubscribe(PollHandle& handle, PollEvents events, IoSlot slot) override;
+
+    void subscribe(PollHandle& handle, PollEvents events, IoSlot slot);
+    void unsubscribe(PollHandle& handle);
+    void resubscribe(PollHandle& handle, PollEvents events);
+    void resubscribe(PollHandle& handle, PollEvents events, IoSlot slot);
 
     int dispatch(CyclTime now);
     
-    void do_wakeup() noexcept {
+    void wakeup() noexcept {
         // Best effort.
         std::error_code ec;
         notify_.write(1, ec);

@@ -15,13 +15,19 @@ inline namespace io {
 constexpr Duration NoTimeout{-1};
 enum class Priority { High = 0, Low = 1 };
 
-// event loop base
-class Scheduler : public Waker {
+/// schedules timers
+class IScheduler : public IWaker {
+public:
+    virtual ~IScheduler() = default;
+    virtual Timer timer(MonoTime expiry, Duration interval, Priority priority, TimerSlot slot) = 0;
+    virtual Timer timer(MonoTime expiry, Priority priority, TimerSlot slot) = 0;
+};
+
+class Scheduler {
 public:
     using This = Scheduler;
     using FD = os::FD;
     
-
 public:
     Scheduler() = default;
 
@@ -35,16 +41,13 @@ public:
 
     /// Throws std::bad_alloc only.
     [[nodiscard]] Timer timer(MonoTime expiry, Duration interval, Priority priority, TimerSlot slot) {
-        return tqs_[static_cast<size_t>(priority)].insert(expiry, interval, slot);
+        return timers(priority).insert(expiry, interval, slot);
     }
     /// Throws std::bad_alloc only.
     [[nodiscard]] Timer timer(MonoTime expiry, Priority priority, TimerSlot slot) {
-        return tqs_[static_cast<size_t>(priority)].insert(expiry, slot);
+        return timers(priority).insert(expiry, slot);
     }
     
-    // clang-format on
-    void add_hook(Hook& hook) noexcept { hooks_.push_back(hook); }
-
     void stop() {
       if(state()!=State::Stopping && state()!=State::Stopped) {
           state(State::Stopping);
@@ -53,10 +56,9 @@ public:
     }
     
     MonoTime next_expiry(MonoTime next) const {
-        enum { High = 0, Low = 1 };
         using namespace std::chrono;
         {
-            auto& tq = tqs_[High];
+            auto& tq = timers(Priority::High);
             if (!tq.empty()) {
                 // Duration until next expiry. Mitigate scheduler latency by preempting the
                 // high-priority timer and busy-waiting for 200us ahead of timer expiry.
@@ -64,7 +66,7 @@ public:
             }
         }
         {
-            auto& tq = tqs_[Low];
+            auto& tq = timers(Priority::Low);
             if (!tq.empty()) {
                 // Duration until next expiry.
                 next = min(next, tq.front().expiry());
@@ -73,16 +75,21 @@ public:
         return next;
     }
 
-    
+    const TimerQueue& timers(Priority priority) const {
+        return tqs_[static_cast<int>(priority)];
+    }
+
+    TimerQueue& timers(Priority priority) {
+        return tqs_[static_cast<int>(priority)];
+    }
+
     auto& state_changed() noexcept { return state_changed_; }
     State state() const noexcept { return state_; }
     void state(State val) noexcept { state_.store(val, std::memory_order_release); state_changed().invoke(this, val); }
-protected:
-    void do_wakeup() noexcept override {}
+
 protected:
     static_assert(static_cast<int>(Priority::High) == 0);
     static_assert(static_cast<int>(Priority::Low) == 1);
-    HookList hooks_;
     std::atomic<bool> stop_{false};
     Signal<Scheduler*, State> state_changed_;
     std::atomic<State> state_{State::Stopped};

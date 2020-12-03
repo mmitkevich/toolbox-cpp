@@ -16,16 +16,16 @@
 
 #include "Epoll.hpp"
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/Poller.hpp"
+#include "toolbox/io/ReactorHandle.hpp"
 #include "toolbox/util/Exception.hpp"
 #include "toolbox/sys/Log.hpp"
 
 
 using namespace toolbox::io;
 
-PollHandle Epoll::subscribe(FD fd, PollEvents events, IoSlot slot)
+void Epoll::subscribe(PollHandle& handle, PollEvents events, IoSlot slot)
 {
-    assert(fd >= 0);
+    auto fd = handle.fd();
     assert(slot);
     if (fd >= static_cast<int>(data_.size())) {
         data_.resize(fd + 1);
@@ -34,7 +34,7 @@ PollHandle Epoll::subscribe(FD fd, PollEvents events, IoSlot slot)
     add(fd, ++ref.sid, events);
     ref.events = events;
     ref.slot = slot;
-    return PollHandle(this, fd, ref.sid);
+    handle.sid(ref.sid);
 }
 
 void Epoll::unsubscribe(PollHandle& handle) {

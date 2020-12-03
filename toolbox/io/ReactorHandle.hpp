@@ -1,13 +1,15 @@
 #pragma once
 
+#include "toolbox/io/Waker.hpp"
 #include <cstdint>
+#include <stdexcept>
 #include <toolbox/io/Handle.hpp>
 #include <toolbox/util/Enum.hpp>
-
+#include <toolbox/io/Scheduler.hpp>
 namespace toolbox {
 inline namespace io {
 
-class IPoller;
+class IReactor;
 
 enum PollEvents: uint32_t {
     None        = 0,
@@ -17,11 +19,11 @@ enum PollEvents: uint32_t {
     ET          = 1U << 31
 };
 
-inline PollEvents operator+(PollEvents lhs, PollEvents rhs) {
+constexpr inline PollEvents operator+(PollEvents lhs, PollEvents rhs) {
     return static_cast<PollEvents>(unbox(lhs) | unbox(rhs));
 }
 
-inline PollEvents operator-(PollEvents lhs, PollEvents rhs) {
+constexpr inline PollEvents operator-(PollEvents lhs, PollEvents rhs) {
     return static_cast<PollEvents>(unbox(lhs) & ~unbox(rhs));
 }
 
@@ -70,6 +72,7 @@ public:
 
     int fd() const noexcept { return data_.fds.fd; }
     int sid() const noexcept { return data_.fds.sid; }
+    void sid(int sid) noexcept { data_.fds.sid = sid;}
     void* ptr() const noexcept { return data_.ptr; }
 protected:
     FDU data_ {};
@@ -84,9 +87,9 @@ public:
 
     constexpr PollHandle(std::nullptr_t = nullptr) noexcept {}
     
-    PollHandle(IPoller* poller, os::FD fd, int sid)
+    PollHandle(IReactor* reactor, os::FD fd, int sid)
     : Base(fd, sid)
-    , poller_(poller)
+    , reactor_(reactor)
     {}
     
     ~PollHandle() { reset(); }
@@ -98,9 +101,9 @@ public:
     // Move.
     PollHandle(PollHandle&& rhs) noexcept
     : Base(rhs)
-    , poller_{rhs.poller_}
+    , reactor_{rhs.reactor_}
     {
-        rhs.poller_ = nullptr;
+        rhs.reactor_ = nullptr;
         rhs.Base::reset();
     }
     PollHandle& operator=(PollHandle&& rhs) noexcept
@@ -112,45 +115,60 @@ public:
 
     void reset(std::nullptr_t = nullptr) noexcept;
     void swap(PollHandle& rhs) noexcept {
-        std::swap(poller_, rhs.poller_);
+        std::swap(reactor_, rhs.reactor_);
         Base::swap(rhs);
     }
-    bool empty() const noexcept { return poller_ == nullptr; }
-    explicit operator bool() const noexcept { return poller_ != nullptr; }
+    bool empty() const noexcept { return reactor_ == nullptr; }
+    explicit operator bool() const noexcept { return reactor_ != nullptr; }
 
     void resubscribe(PollEvents events);
     void resubscribe(PollEvents events, IoSlot slot);
+    IReactor* reactor() { return reactor_; }
 protected:
-    IPoller *poller_ {nullptr};
+    IReactor *reactor_ {nullptr};
 };
 
 
-class IPoller {
+class IReactor {
 public:
-    virtual ~IPoller() = default;
-    virtual PollHandle subscribe(int fd, PollEvents events, IoSlot slot) = 0;
+    virtual ~IReactor() = default;
+    virtual void subscribe(PollHandle& handle, PollEvents events, IoSlot slot) = 0;
     virtual void unsubscribe(PollHandle& handle) = 0;
     virtual void resubscribe(PollHandle& handle, PollEvents events) = 0;    
     virtual void resubscribe(PollHandle& handle, PollEvents events, IoSlot slot) = 0;    
 };
 
+template<typename ImplT>
+class ReactorImpl : public ImplT, public IReactor {
+public:
+    using Base=ImplT;
+    using Base::Base;
+    using Base::wakeup;
+    using Base::wait;
+    using Base::dispatch;
+public:
+    void subscribe(PollHandle& handle, PollEvents events, IoSlot slot) override { Base::subscribe(handle, events, slot); };
+    void unsubscribe(PollHandle& handle) override { return Base::unsubscribe(handle); };
+    void resubscribe(PollHandle& handle, PollEvents events) override { Base::resubscribe(handle, events); };    
+    void resubscribe(PollHandle& handle, PollEvents events, IoSlot slot) override { Base::resubscribe(handle, events, slot); };    
+};
 
 inline void PollHandle::reset(std::nullptr_t) noexcept
 {
-    if (poller_) {
-        poller_->unsubscribe(*this);
-        poller_ = nullptr;
+    if (reactor_) {
+        reactor_->unsubscribe(*this);
+        reactor_ = nullptr;
         //FIXME: move to unsubscribe
         Base::reset();
     }
 }
 
 inline void PollHandle::resubscribe(PollEvents events) {
-    poller_->resubscribe(*this, events);
+    reactor_->resubscribe(*this, events);
 } 
 
 inline void PollHandle::resubscribe(PollEvents events, IoSlot slot) {
-    poller_->resubscribe(*this, events, slot);
+    reactor_->resubscribe(*this, events, slot);
 } 
 
 

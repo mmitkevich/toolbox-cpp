@@ -16,7 +16,7 @@
 
 #include "Reactor.hpp"
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/Poller.hpp"
+#include "toolbox/io/ReactorHandle.hpp"
 
 #include <toolbox/net/Endpoint.hpp>
 #include <toolbox/net/IoSock.hpp>

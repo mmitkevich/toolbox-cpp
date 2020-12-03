@@ -16,105 +16,152 @@
 
 #ifndef TOOLBOX_IO_REACTOR_HPP
 #define TOOLBOX_IO_REACTOR_HPP
-#include "toolbox/io/Handle.hpp"
 #include <cstdint>
-#include <system_error>
+#include <utility>
+
 #include <toolbox/io/Scheduler.hpp>
 #include <toolbox/sys/Error.hpp>
+
+#include "toolbox/io/Handle.hpp"
+
+#include <toolbox/io/ReactorHandle.hpp>
+
 #include <toolbox/io/Epoll.hpp>
 #include <toolbox/io/Qpoll.hpp>
+
 #include <toolbox/io/EventFd.hpp>
+
 #include <toolbox/io/Runner.hpp>
-#include <utility>
+
 #include <toolbox/util/Tuple.hpp>
 
 namespace toolbox {
 inline namespace io {
 
-
-template<typename...PollersT >
-class BasicReactor : public Scheduler {
+template<typename SchedulerT, typename DerivedT>
+class BasicReactor : public SchedulerT {
+    using Scheduler = SchedulerT;
 public:
-    using This = BasicReactor<PollersT...>;
-    using Base = Scheduler;
+    using Scheduler::state;
+    // clang-format on
+    void add_hook(Hook& hook) noexcept { hooks_.push_back(hook); }
+    HookList& hooks() noexcept { return hooks_; }
+    void run()
+    {
+        state(State::Starting);
+        state(State::Started);
+        std::size_t i {0};
+        while (!Scheduler::stop_.load(std::memory_order_acquire)) {
+            // Busy-wait for a small number of cycles after work was done.
+            if (static_cast<DerivedT*>(this)->poll(CyclTime::now(), i++ < 100 ? 0s : NoTimeout) > 0) {
+                // Reset counter when work has been done.
+                i = 0;
+            }
+        }
+        state(State::Stopping);
+        state(State::Stopped);
+    }
+protected:
+    HookList hooks_;
+};
+
+/// multi-reactor
+template<typename SchedulerT, typename...ReactorsT>
+class BasicMultiReactor: public BasicReactor<SchedulerT, BasicMultiReactor<SchedulerT, ReactorsT...> > {
+public:
+    using This = BasicMultiReactor<SchedulerT, ReactorsT...>;
+    using Base = BasicReactor<SchedulerT, This>;
+    using Scheduler = SchedulerT;
     using Handle = PollHandle;
     using Runner = BasicRunner<This>;
-    
-    static_assert(sizeof...(PollersT)>0, "at least one Poller required");
+    using FD = os::FD;
 
-    static constexpr unsigned FDLimit = 0x80000; // per poller
+    static_assert(sizeof...(ReactorsT)>0, "at least one Reactor implementation required");
 
-    static constexpr FD CustomFDMask = (1U<<31);  // high bit means custom fd
+    static constexpr unsigned CustomFDBits = 12; // per reactor
+    static constexpr unsigned CustomFDMask = (1U<<12)-1; // per reactor
+
+    static constexpr FD HighBitFDMask = (1U<<31);  // high bit means custom fd
 public:
     template<typename...ArgsT>
-    explicit BasicReactor(ArgsT...args)
-    : pollers_(std::forward<ArgsT>(args)...)                                        // data
+    explicit BasicMultiReactor(ArgsT...args)
+    : reactors_(std::forward<ArgsT>(args)...)                                        // data
     {}
+    
+    using Base::hooks;
+    using Base::next_expiry;
+    using Base::timers;
 
-    IPoller* poller(FD fd) {
+    constexpr static std::size_t ReactorsSize = sizeof...(ReactorsT);
+
+    IReactor* reactor(FD fd) {
         // high bit set in FD means this is custom poller
-        constexpr std::size_t PollersSize = sizeof...(PollersT);
-        if(!(fd & CustomFDMask)) {
-            return static_cast<IPoller*>(tuple_addressof(pollers_, PollersSize-1));    // last poller assumed as "system"
+
+        if(!(fd & HighBitFDMask)) {
+            return static_cast<IReactor*>(tuple_addressof(reactors_, ReactorsSize-1));    // last poller assumed as "system"
         }
-        std::size_t i = fd & (~CustomFDMask);
-        std::size_t poller_index = i / FDLimit;
-        std::size_t poller_fd = i % FDLimit;
-        if(poller_index>=PollersSize)
+        std::size_t ix = fd & (~CustomFDMask);
+        std::size_t rix = ix >> CustomFDBits;
+        std::size_t rfd = ix & CustomFDMask;
+        if(rix>=ReactorsSize)
             return nullptr;
-        return static_cast<IPoller*>(tuple_addressof(pollers_, poller_index));
+        return static_cast<IReactor*>(tuple_addressof(reactors_, rix));
     }
 
     // clang-format off
     [[nodiscard]] 
     PollHandle subscribe(FD fd, PollEvents events, IoSlot slot) {
-        IPoller* pollr = poller(fd);
-        if(!pollr)
+        IReactor* r = reactor(fd);
+        if(!r)
             throw std::system_error(std::make_error_code(std::errc::bad_file_descriptor));
-        return pollr->subscribe(fd, events, slot);
+        PollHandle handle(r, fd, 0);
+        subscribe(handle, events, slot);
+        return handle;
     }
-  
-    int poll(CyclTime now, Duration timeout = NoTimeout);
-    
-    void run();
-protected:
-    /// Thread-safe.
-    void do_wakeup() noexcept final { std::get<sizeof...(PollersT)-1>(pollers_).do_wakeup(); }
 
+    void subscribe(PollHandle& handle, PollEvents events, IoSlot slot) {
+        IReactor* r = handle.reactor();
+        assert(r!=nullptr);
+        r->subscribe(handle, events, slot);
+    }
+
+    int poll(CyclTime now, Duration timeout = NoTimeout);
+    void wakeup() noexcept { 
+        // wakeup last reactor since others are always busy-polled
+        std::get<ReactorsSize-1>(reactors_).wakeup(); 
+    }
 protected:
-    std::tuple<PollersT...> pollers_;
-    
+    std::tuple<ReactorImpl<ReactorsT>...> reactors_;
 };
 
 
-template<typename...PollersT>
-inline int BasicReactor<PollersT...>::poll(CyclTime now, Duration timeout)
+template<typename SchedulerT, typename...ReactorsT>
+inline int BasicMultiReactor<SchedulerT, ReactorsT...>::poll(CyclTime now, Duration timeout)
 {
-    enum { High = 0, Low = 1 };
     using namespace std::chrono;
 
     // If timeout is zero then the wait_until time should also be zero to signify no wait.
     MonoTime wait_until{};
-    if (!is_zero(timeout) && hooks_.empty()) {
+    if (!is_zero(timeout) && hooks().empty()) {
         const MonoTime next = next_expiry(timeout == NoTimeout ? MonoClock::max() : now.mono_time() + timeout);
         if (next > now.mono_time()) {
             wait_until = next;
         }
     }
     int rn = 0;
-    std::size_t i = sizeof...(PollersT);
-    tuple_for_each(pollers_, [&](auto &pollr) {
+    std::size_t i = sizeof...(ReactorsT);
+    tuple_for_each(reactors_, [&](auto &r) {
         i--;
         int n = 0;
         std::error_code ec;
         if(i>0) {
-            n = pollr.wait(MonoTime{}, ec); // no blocking on pollers except last one
+            n = r.wait(MonoTime{}, ec); // no blocking on pollers except last one
         } else if (wait_until < MonoClock::max()) {
             // The wait function will not block if time is zero.
-            n = pollr.wait(wait_until, ec);
+            n = r.wait(wait_until, ec);
         } else {
             // Block indefinitely.
-            n = pollr.wait(ec);
+            n = r.wait(ec);
         }
         if (ec) {
             if (ec.value() != EINTR) {
@@ -125,35 +172,18 @@ inline int BasicReactor<PollersT...>::poll(CyclTime now, Duration timeout)
             if (!is_zero(wait_until)) {
                 now = CyclTime::now();
             }
-            rn += tqs_[High].dispatch(now) + pollr.dispatch(now);
+            rn += timers(Priority::High).dispatch(now) + r.dispatch(now);
             // Low priority timers are only dispatched during empty cycles.
             if (i==0 && n == 0) {
-                rn += tqs_[Low].dispatch(now);
+                rn += timers(Priority::Low).dispatch(now);
             }
         }
     });
-    io::dispatch(now, hooks_);
+    io::dispatch(now, hooks());
     return rn;
 }
 
-template<typename... PollersT>
-void BasicReactor<PollersT...>::run()
-{
-    state(State::Starting);
-    state(State::Started);
-    std::size_t i{0};
-    while (!stop_.load(std::memory_order_acquire)) {
-        // Busy-wait for a small number of cycles after work was done.
-        if (poll(CyclTime::now(), i++ < 100 ? 0s : NoTimeout) > 0) {
-            // Reset counter when work has been done.
-            i = 0;
-        }
-    }
-    state(State::Stopping);
-    state(State::Stopped);
-}
-
-using Reactor = BasicReactor<Epoll>;
+using Reactor = BasicMultiReactor<Scheduler, Epoll>;
 
 
 } // namespace io

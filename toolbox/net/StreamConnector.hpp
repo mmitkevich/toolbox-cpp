@@ -95,7 +95,7 @@ class StreamConnector {
             static_cast<DerivedT*>(this)->on_sock_connect_error(now, e);
         }
     }
-
+protected:
     Endpoint ep_;
     StreamSockClnt sock_;
     Reactor::Handle sub_;

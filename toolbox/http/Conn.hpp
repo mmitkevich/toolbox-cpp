@@ -18,7 +18,7 @@
 #define TOOLBOX_HTTP_CONN_HPP
 
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/Poller.hpp"
+#include "toolbox/io/ReactorHandle.hpp"
 #include <exception>
 #include <toolbox/http/Parser.hpp>
 #include <toolbox/http/Request.hpp>

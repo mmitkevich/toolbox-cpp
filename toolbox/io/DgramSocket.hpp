@@ -14,35 +14,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef TOOLBOX_IO_WAKER_HPP
-#define TOOLBOX_IO_WAKER_HPP
+#pragma once
 
-#include <toolbox/Config.h>
+#include "toolbox/io/Buffer.hpp"
+#include "toolbox/io/ReactorHandle.hpp"
+#include "toolbox/sys/Error.hpp"
+#include <asm-generic/errno.h>
+#include <exception>
+#include <system_error>
+#include <toolbox/io/Event.hpp>
+#include <toolbox/io/Reactor.hpp>
+#include <toolbox/net/DgramSock.hpp>
+#include <toolbox/io/Socket.hpp>
 
 namespace toolbox {
 inline namespace io {
 
-/// The Waker is implemented by types that may be woken-up, interrupted or otherwise notified
-/// asynchronously.
-class TOOLBOX_API IWaker {
-  public:
-    IWaker() noexcept = default;
-    virtual ~IWaker() = default;
-/*
-    // Copy.
-    IWaker(const IWaker&) noexcept = default;
-    IWaker& operator=(const IWaker&) noexcept = default;
 
-    // Move.
-    IWaker(IWaker&&) noexcept = default;
-    IWaker& operator=(IWaker&&) noexcept = default;
-*/
-    void wakeup() noexcept { on_wakeup(); }
-  protected:
-    virtual void on_wakeup() noexcept = 0;
+class DgramSocket : public BasicSocket<DgramSock, DgramSocket> {
+    using Base = BasicSocket<DgramSock, DgramSocket>;
+  public:
+    using Sock = typename Base::Sock;
+    using Protocol = typename Sock::Protocol;
+    using Endpoint = typename Sock::Endpoint;
+  public:
+    using Base::Base;
+
+    using Base::sock, Base::reactor;
+    using Base::open, Base::bind;
+    using Base::read, Base::write, Base::recv; 
 };
 
-} // namespace io
+} // namespace net
 } // namespace toolbox
-
-#endif // TOOLBOX_IO_WAKER_HPP

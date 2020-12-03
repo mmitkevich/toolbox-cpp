@@ -64,6 +64,8 @@ set(lib_SOURCES
   io/Runner.cpp
   io/Timer.cpp
   io/TimerFd.cpp
+  io/StreamSocket.cpp
+  io/ServerSocket.cpp
   ipc/Futex.cpp
   ipc/Mmap.cpp
   ipc/MpmcQueue.cpp
@@ -87,7 +89,6 @@ set(lib_SOURCES
   net/StreamConnector.cpp
   net/StreamSock.cpp
   net/Pcap.cpp
-  net/AsyncStreamSock.cpp
   sys/Daemon.cpp
   sys/Date.cpp
   sys/Error.cpp

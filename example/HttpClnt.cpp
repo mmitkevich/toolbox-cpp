@@ -1,7 +1,7 @@
 #include "toolbox/io/Runner.hpp"
 #include "toolbox/net/Endpoint.hpp"
 #include "toolbox/net/StreamSock.hpp"
-#include "toolbox/net/AsyncStreamSock.hpp"
+#include "toolbox/io/StreamSocket.hpp"
 #include "toolbox/sys/Log.hpp"
 #include "toolbox/sys/Time.hpp"
 #include <cstdlib>
@@ -18,7 +18,7 @@ namespace tb = toolbox;
 
 class HttpClnt {
   public:
-    using Socket = AsyncStreamSock<StreamSockClnt>;
+    using Socket = StreamSocket;
     using Endpoint = typename Socket::Endpoint;
     using Protocol = typename Socket::Protocol;
     using This = HttpClnt;
@@ -27,23 +27,30 @@ class HttpClnt {
     : sock_(reactor) {
 
     }
-    void open(Protocol protocol) {
-        sock_.open(protocol);
-    }
-    void connect(const Endpoint& ep) {
+    void open(const Endpoint& ep) {
         endpoint_ = ep;
-        open(ep.protocol());
+        sock_.open(ep.protocol());
         sock_.connect(ep, tb::bind<&This::on_connected>(this));
     }
+    void close() {
+        TOOLBOX_DEBUG<<"close";
+        sock_.close();
+    }
+
+    void stop() {
+        close();
+        TOOLBOX_DEBUG<<"stop";
+        sock_.reactor().stop();
+    }
     
-    static constexpr std::string_view Req = "GET /foo HTTP/1.1\r\n\r\n";
+    static constexpr std::string_view Request = "GET /foo HTTP/1.1\r\n\r\n";
 
     void on_connected(std::error_code ec) {
         TOOLBOX_DEBUG<<"connected, ep:" <<endpoint_<<", ec:"<<ec;
         if(ec) {
-            throw std::system_error(ec);
+            stop();
         }
-        send(Req);
+        send(Request);
     }
 
     void send(std::string_view req) {
@@ -57,23 +64,28 @@ class HttpClnt {
         assert(size>=0);
         output_.commit(size);
         output_.consume(size);
-        TOOLBOX_DEBUG<<count_<<" sent: " << size <<" ec:"<<ec;
+        TOOLBOX_INFO<<count_<<" sent: " << size <<" ec:"<<ec;
         sock_.read(input_.prepare(2397), tb::bind<&This::on_recv>(this));
     }
     void on_recv(ssize_t size, std::error_code ec) {
         assert(size>=0);
         input_.commit(size);
-        TOOLBOX_DEBUG << count_<<" recv: " << size <<" ec:"<<ec<<" " << std::string_view {(const char*)input_.buffer().data(), input_.buffer().size()};
+        
+        TOOLBOX_INFO << count_<<" recv: " << size <<" ec:"<<ec<<" " << std::string_view {(const char*)input_.buffer().data(), input_.buffer().size()};
         input_.consume(size);
         if(count_<100) {
             count_++;            
-            send(Req);
+            send(Request);
+        } else if(size==0) { // EOF
+            stop();
+        } else {
+            sock_.read(input_.prepare(2397), tb::bind<&This::on_recv>(this));
         }
         //sock_.read(input_.prepare(2397), tb::bind<&This::on_recv>(this));
     }
   private:
-    Endpoint endpoint_;
     Socket sock_;
+    Endpoint endpoint_;    
     Buffer input_;
     Buffer output_;
     std::size_t count_{};
@@ -81,11 +93,9 @@ class HttpClnt {
 
 int main(int argc, char* argv[]) {
     tb::Reactor reactor{1024};
+    HttpClnt clnt(reactor);
     auto ep = tb::parse_stream_endpoint("tcp4://127.0.0.1:8888");
-    auto clnt = HttpClnt(reactor);
-    clnt.connect(ep);
-
-    //auto timer_sub = reactor.timer(CyclTime::now().mono_time(), Duration::zero(), Priority::Low, bind(&on_timer));
+    clnt.open(ep);
     reactor.run();
     
     return EXIT_SUCCESS;

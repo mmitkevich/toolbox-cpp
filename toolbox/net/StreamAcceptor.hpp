@@ -51,7 +51,9 @@ class StreamAcceptor {
   protected:
     ~StreamAcceptor() = default;
 
-  private:
+  void on_sock_prepare(CyclTime now, IoSock& sock) {};
+  void on_sock_accept(CyclTime now, IoSock&& sock, Endpoint& endpoint) {};
+protected:
     void on_io_event(CyclTime now, os::FD fd, PollEvents events)
     {
         Endpoint ep;
@@ -63,7 +65,7 @@ class StreamAcceptor {
         }
         static_cast<DerivedT*>(this)->on_sock_accept(now, std::move(sock), ep);
     }
-
+protected:
     StreamSockServ serv_;
     Reactor::Handle sub_;
 };
