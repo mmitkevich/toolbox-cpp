@@ -1,54 +1,40 @@
 #pragma once
-#include "toolbox/io/ReactorHandle.hpp"
+
+#include "toolbox/io/PollHandle.hpp"
 #include <toolbox/ipc/MagicRingBuffer.hpp>
 
 namespace toolbox {
 inline namespace io {
 
 template<typename QueueT> 
-class BasicQueuePoll : public IReactor {
+class BasicQueuePoll {
 public:
-    os::FD add(QueueT& queue, PollEvents events=PollEvents::None) {
-        data_.emplace_back({&queue, events});
-        return data_.size() - 1;
+    bool open(PollHandle& handle) {
+        auto ix = static_cast<std::size_t>(handle.fd());
+        if(ix>=data_.size())
+            data_.resize(ix+1);
+        data_[ix] = handle;
+        return true;
     }
-    void del(os::FD fd) {
-        std::size_t i = (std::size_t) fd;
-        assert(i<data_.size());
-        data_[i].queue = nullptr;
+    void close(PollHandle& handle) {
+        auto ix = static_cast<std::size_t>(handle.fd());
+        assert(ix<data_.size());
+        data_[ix].reset();
     }
-    void mod(os::FD fd, PollEvents events) {
-        std::size_t i = (std::size_t) fd;
-        assert(i<data_.size());
-        data_[i].events = events;
-    }
-    PollHandle subscribe(os::FD fd, PollEvents events, IoSlot slot) override {
-        std::size_t i = (std::size_t) fd;
-        assert(i<data_.size());
-        data_[i].events = events;
-        return PollHandle{this, fd, 0};
-    }
-    void unsubscribe(PollHandle& handle) override {
-        del(handle.fd());
-    }
-    void resubscribe(PollHandle& handle, PollEvents events) override {
-        mod(handle.fd(), events);
-    }
-
     int wait(std::error_code& ec) noexcept {
         int n = 0;
-        for(std::size_t i=0; i<data_.size(); i++) {
-            auto &q = *data_[i].queue;
+        for(auto& ref: data_) {
+            auto &q = *static_cast<QueueT*>(ref.ptr());
             if(q) {
-                auto ev = data_[i].events;
+                auto ev = ref.events();
                 if(q.size()>0) {
-                    ev |= PollEvents::Read;
+                    ev = ev + PollEvents::Read;
                 }
                 if(q.available()>0) {
-                    ev |= PollEvents::Write;
+                    ev = ev + PollEvents::Write;
                 }
-                data_[i].events = ev;
-                if(ev!=PollEvents::None)
+                ref.events(ev);
+                if(ev != PollEvents::None)
                     n++;
             }
         }
@@ -61,12 +47,7 @@ public:
         return 0;   
     }
 private:
-    struct Data {
-        QueueT* queue;
-        PollEvents events;
-        IoSlot slot;        
-    };
-    std::vector<Data> data_;
+    std::vector<PollFD> data_;
 
 };
 

@@ -17,7 +17,7 @@
 #include "toolbox/bm/Suite.hpp"
 #include "toolbox/hdr/Histogram.hpp"
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/ReactorHandle.hpp"
+#include "toolbox/io/PollHandle.hpp"
 #include "toolbox/sys/Log.hpp"
 #include "toolbox/sys/Time.hpp"
 #include <exception>
@@ -45,9 +45,9 @@ class EchoConn {
     EchoConn(CyclTime now, Reactor& r, IoSock&& sock, const StreamEndpoint& ep)
     : sock_{move(sock)}
     , ep_{ep}
-    , reactor_(r)
+    , sub_(*sock, r.ctl(*sock))
     {
-        sub_ = r.subscribe(sock_.get(), PollEvents::Read, bind<&EchoConn::on_input>(this));
+        sub_.add(PollEvents::Read, bind<&EchoConn::on_input>(this));
         tmr_ = r.timer(now.mono_time(), PingInterval, Priority::Low,
                        bind<&EchoConn::on_timer>(this));
     }
@@ -110,8 +110,7 @@ class EchoConn {
     }
     IoSock sock_;
     const StreamEndpoint ep_;
-    Reactor::Handle sub_;
-    Reactor& reactor_;
+    PollHandle sub_;
     Buffer buf_;
     Timer tmr_;
     MonoTime sent_time_;

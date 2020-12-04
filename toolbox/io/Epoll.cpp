@@ -16,62 +16,42 @@
 
 #include "Epoll.hpp"
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/ReactorHandle.hpp"
+#include "toolbox/io/PollHandle.hpp"
 #include "toolbox/util/Exception.hpp"
 #include "toolbox/sys/Log.hpp"
 
 
 using namespace toolbox::io;
 
-void Epoll::subscribe(PollHandle& handle, PollEvents events, IoSlot slot)
-{
+bool Epoll::ctl(PollHandle& handle) {
     auto fd = handle.fd();
-    assert(slot);
-    if (fd >= static_cast<int>(data_.size())) {
-        data_.resize(fd + 1);
-    }
-    auto& ref = data_[fd];
-    add(fd, ++ref.sid, events);
-    ref.events = events;
-    ref.slot = slot;
-    handle.sid(ref.sid);
-}
-
-void Epoll::unsubscribe(PollHandle& handle) {
-    auto& ref = data_[handle.fd()];
-    if (ref.sid == handle.sid()) {
-        del(handle.fd());
-        ref.events = PollEvents::None;
-        ref.slot.reset();
-    }else {
-        throw std::system_error(std::make_error_code(std::errc::invalid_argument));
-    }
-}
-
-
-void Epoll::resubscribe(PollHandle& handle, PollEvents events)
-{
-    auto& ref = data_[handle.fd()];
-    if (ref.sid == handle.sid()) {
-        if (ref.events != events) {
-            mod(handle.fd(), handle.sid(), events);
-            ref.events = events;
+    auto ix = static_cast<std::size_t>(fd);
+    if(handle.empty()) {
+        if(ix<data_.size()) {
+            del(fd);
+            data_[ix].reset();
+        } else {
+            return false;
+        }
+    } else {
+        if (ix >= data_.size()) {
+            data_.resize(ix + 1);
+        }
+        auto& ref = data_[ix];
+        if(ref.empty()) {
+            handle.next_sid();                          // initial subscribe            
+            add(fd, handle.sid(), handle.events());     // throws on error
+            ref = handle;                               // commit
+        } else if(ref.sid()!=handle.sid()) { 
+            return false;
+        } else {
+            mod(fd, handle.sid(), handle.events());     // throws on error
+            ref.events(handle.events());                // commit
+            ref.slot(handle.slot());
         }
     }
+    return true;
 }
-
-void Epoll::resubscribe(PollHandle& handle, PollEvents events, IoSlot slot)
-{
-    auto& ref = data_[handle.fd()];
-    if (ref.sid == handle.sid()) {
-        ref.slot = slot;
-        if (ref.events != events) {
-            mod(handle.fd(), handle.sid(), events);
-            ref.events = events;
-        }
-    }
-}
-
 
 int Epoll::dispatch(CyclTime now)
 {
@@ -84,28 +64,30 @@ int Epoll::dispatch(CyclTime now)
             notify_.read();
             continue;
         }
-        const Data& ref = data_[fd];
-        if (!ref.slot) {
+        const PollFD& ref = data_[fd];
+        auto s = ref.slot();
+        if (!s) {
             // Ignore timerfd.
             continue;
         }
 
         const int sid = Epoll::sid(ev);
         // Skip this socket if it was modified after the call to wait().
-        if (ref.sid > sid) {
+        if (ref.sid() > sid) {
             continue;
         }
         // Apply the interest events to filter-out any events that the user may have removed from
         // the events since the call to wait() was made. This would typically happen via a reentrant
         // call into the reactor from an event-handler. N.B. EpollErr and EpollHup are always
         // reported if they occur, regardless of whether they are specified in events.
-        const uint32_t events = ev.events & (to_epoll_events(ref.events) | EpollErr | EpollHup);
+        const uint32_t events = ev.events & (to_epoll_events(ref.events()) | EpollErr | EpollHup);
         if (!events) {
             continue;
         }
 
         try {
-            ref.slot(now, fd, from_epoll_events(events));
+            assert(s!=nullptr);
+            s.invoke(now, fd, from_epoll_events(events));
         } catch (const std::exception& e) {
             TOOLBOX_ERROR << "error handling io event: " << e.what();
         }

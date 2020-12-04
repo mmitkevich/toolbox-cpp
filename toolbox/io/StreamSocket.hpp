@@ -17,7 +17,7 @@
 #pragma once
 
 #include "toolbox/io/Buffer.hpp"
-#include "toolbox/io/ReactorHandle.hpp"
+#include "toolbox/io/PollHandle.hpp"
 #include "toolbox/sys/Error.hpp"
 #include <asm-generic/errno.h>
 #include <exception>
@@ -30,45 +30,27 @@
 namespace toolbox {
 inline namespace net {
 
-template<typename SockT, typename DerivedT>
-class BasicStreamSocket : public BasicSocket<SockT, DerivedT> {
-    using This = BasicStreamSocket<SockT, DerivedT>;
-    using Base = BasicSocket<SockT, DerivedT>;
+template<typename SockT, typename PollT, typename DerivedT>
+class BasicStreamSocket : public BasicSocket<SockT, PollT, DerivedT> {
+    using This = BasicStreamSocket<SockT, PollT, DerivedT>;
+    using Base = BasicSocket<SockT, PollT, DerivedT>;
 public:
     using Sock = SockT;
-    using Endpoint = typename Sock::Endpoint;
+    using typename Base::PollHandle;
+    using typename Base::Endpoint;
 public:
     using Base::Base;
 
-    using Base::state;
-    using Base::sock;
-    using Base::poll_events;
-    using Base::impl;
-    using Base::close;
-
-    void on_sock_prepare(Sock& sock) {
-        Base::on_sock_prepare(sock);
-        if (sock.is_ip_family()) {
-            set_tcp_no_delay(sock.get(), true);
-        }
-    }
-    
-    IoSlot open_io_slot() {
-        // open to use conn_event as slot
-        return util::bind<&DerivedT::on_conn_event>(this);
-    }
-
-    IoSlot io_slot() {
-        // main io slot
-        return util::bind<&DerivedT::on_io_event>(this);
-    }
+    using Base::state, Base::sock, Base::poll, Base::impl;
+    using Base::read, Base::write, Base::recv;
 
     void connect(const Endpoint& ep, Slot<std::error_code> slot) {
         state(SocketState::Connecting);
-        // Base::sub_.resubscribe(poll_events(), conn_io_slot());
+
         if(!conn_.empty()) {
             throw std::system_error{make_error_code(std::errc::operation_in_progress), "connect"};
         }
+        poll().mod(PollEvents::Read + PollEvents::Write, conn_slot());
         std::error_code ec {};
         sock().connect(ep, ec);
         if (ec && ec.value() != EINPROGRESS) { //ec != std::errc::operation_in_progress
@@ -76,44 +58,48 @@ public:
         }
         conn_ = {SockOpId::Connect, slot};
         if(!ec) {
-            Base::sub_.resubscribe(poll_events(), impl().io_slot());
+            poll().mod(impl().io_slot());
             conn_.complete(ec);
         }
     }
     
   protected:
-    using Base::on_io_event;
+    friend Base;
+    using Base::io_slot, Base::on_io_event;
+    void on_sock_prepare(Sock& sock) {
+        Base::on_sock_prepare(sock);
+        if (sock.is_ip_family()) {
+            set_tcp_no_delay(sock.get(), true);
+        }
+    }
+    IoSlot conn_slot() { return util::bind<&DerivedT::on_conn_event>(this); }
     void on_conn_event(CyclTime now, os::FD fd, PollEvents events) {
         //assert(state_==SocketState::Connecting);
         if(conn_.empty())
             return; // in case we got error but didn't close
         if((events & PollEvents::Error)) {
             std::error_code ec = sock().get_error();
-            Base::sub_.resubscribe(poll_events(), open_io_slot());
             state(SocketState::Disconnected);
             conn_.complete(ec);
         } else if((events & PollEvents::Write)) {
             std::error_code ec {};
             state(SocketState::Connected);
-            Base::sub_.resubscribe(poll_events(), io_slot());            
+            poll().mod(PollEvents::Read, io_slot());   
             conn_.complete(ec);
         }
-
     }
 protected:
     SockOp conn_;
 };
 
-class StreamSocket  : public BasicStreamSocket<StreamSockClnt, StreamSocket> {
-  using Base = BasicStreamSocket<StreamSockClnt, StreamSocket>;
+class StreamSocket  : public BasicStreamSocket<StreamSockClnt, PollHandle, StreamSocket> {
+  using Base = BasicStreamSocket<StreamSockClnt, PollHandle, StreamSocket>;
 public:
   using Sock = typename Base::Sock;
+  using PollHandle = typename Base::PollHandle;
 public:
   using Base::Base;
-  using Base::state;
-  using Base::sock;
-  using Base::poll_events;
-  using Base::impl;
+  using Base::state, Base::sock, Base::poll;
   using Base::read, Base::write, Base::recv;
 };
 

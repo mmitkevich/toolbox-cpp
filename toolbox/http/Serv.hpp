@@ -24,7 +24,7 @@
 namespace toolbox {
 inline namespace http {
 
-template <typename ConnT = HttpConn>
+template <typename ConnT = HttpServerConn>
 class BasicHttpServ : public StreamAcceptor<BasicHttpServ<ConnT>> {
     using This = BasicHttpServ<ConnT>;
     using Base =  StreamAcceptor<This>;
@@ -75,7 +75,7 @@ class BasicHttpServ : public StreamAcceptor<BasicHttpServ<ConnT>> {
     Slot<CyclTime, Conn&> accept_;
 };
 
-using HttpServ = BasicHttpServ<HttpConn>;
+using HttpServ = BasicHttpServ<HttpServerConn>;
 
 } // namespace http
 } // namespace toolbox

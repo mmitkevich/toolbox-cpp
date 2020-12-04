@@ -16,7 +16,7 @@
 
 #include "Reactor.hpp"
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/ReactorHandle.hpp"
+#include "toolbox/io/PollHandle.hpp"
 
 #include <toolbox/net/Endpoint.hpp>
 #include <toolbox/net/IoSock.hpp>
@@ -101,7 +101,7 @@ BOOST_AUTO_TEST_CASE(ReactorEdgeCase)
     BOOST_TEST(h->matches == 1);
 
     // Revert to level-triggered.
-    sub.resubscribe(PollEvents::Read);
+    sub.mod(PollEvents::Read);
     BOOST_TEST(r.poll(now, 0ms) == 1);
     BOOST_TEST(h->matches == 2);
 

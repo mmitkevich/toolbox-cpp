@@ -14,18 +14,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef TOOLBOX_IO_EPOLL_HPP
-#define TOOLBOX_IO_EPOLL_HPP
+#pragma once
 
-#include "toolbox/io/Waker.hpp"
 #include <sstream>
-#include <toolbox/io/Event.hpp>
 #include <toolbox/io/Handle.hpp>
 #include <toolbox/io/TimerFd.hpp>
 #include <toolbox/sys/Error.hpp>
 #include <toolbox/util/Slot.hpp>
 #include <toolbox/io/EventFd.hpp>
-#include <toolbox/io/ReactorHandle.hpp>
+#include <toolbox/io/PollHandle.hpp>
 #include <toolbox/sys/Log.hpp>
 #include <sys/epoll.h>
 
@@ -161,7 +158,6 @@ enum : unsigned {
 
 using EpollEvent = epoll_event;
 
-
 /// This is Epoll reactor implementation
 class TOOLBOX_API Epoll {
   public:
@@ -171,11 +167,6 @@ class TOOLBOX_API Epoll {
     using FD = typename FileHandle::FD;
     
     using Handle = PollHandle;
-    struct Data {
-        int sid{};
-        PollEvents events;
-        IoSlot slot;
-    };
 
     static constexpr FD fd(const Event& ev) noexcept
     {
@@ -256,12 +247,9 @@ class TOOLBOX_API Epoll {
         ready_ =  os::epoll_wait(*epfd_, events_.data(), (int)events_.size(), is_zero(timeout) ? 0 : -1, ec);
         return ready_;
     }
-    
 
-    void subscribe(PollHandle& handle, PollEvents events, IoSlot slot);
-    void unsubscribe(PollHandle& handle);
-    void resubscribe(PollHandle& handle, PollEvents events);
-    void resubscribe(PollHandle& handle, PollEvents events, IoSlot slot);
+    /// modifies subscription
+    bool ctl(PollHandle& hanle);
 
     int dispatch(CyclTime now);
     
@@ -321,7 +309,7 @@ private:
     FileHandle epfd_;
     TimerFd<MonoClock> tfd_;
     MonoTime timeout_{};
-    std::vector<Data> data_;
+    std::vector<PollFD> data_;
     EventFd notify_{0, EFD_NONBLOCK};
     std::array<Event,MaxEvents> events_;
     std::size_t ready_{};
@@ -329,5 +317,3 @@ private:
 
 } // namespace io
 } // namespace toolbox
-
-#endif // TOOLBOX_IO_EPOLL_HPP

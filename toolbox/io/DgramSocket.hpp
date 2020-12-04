@@ -17,9 +17,8 @@
 #pragma once
 
 #include "toolbox/io/Buffer.hpp"
-#include "toolbox/io/ReactorHandle.hpp"
+#include "toolbox/io/PollHandle.hpp"
 #include "toolbox/sys/Error.hpp"
-#include <asm-generic/errno.h>
 #include <exception>
 #include <system_error>
 #include <toolbox/io/Event.hpp>
@@ -31,16 +30,15 @@ namespace toolbox {
 inline namespace io {
 
 
-class DgramSocket : public BasicSocket<DgramSock, DgramSocket> {
-    using Base = BasicSocket<DgramSock, DgramSocket>;
+class DgramSocket : public BasicSocket<DgramSock, PollHandle, DgramSocket> {
+    using Base = BasicSocket<DgramSock, PollHandle, DgramSocket>;
   public:
-    using Sock = typename Base::Sock;
-    using Protocol = typename Sock::Protocol;
-    using Endpoint = typename Sock::Endpoint;
+    using typename Base::Sock, typename Base::PollHandle;
+    using typename Base::Protocol, typename Base::Endpoint;
   public:
     using Base::Base;
 
-    using Base::sock, Base::reactor;
+    using Base::sock, Base::poll;
     using Base::open, Base::bind;
     using Base::read, Base::write, Base::recv; 
 };

@@ -34,7 +34,8 @@ class HttpApp {
   public:
     using Slot = BasicSlot<const HttpRequest&, HttpStream&>;
     using SlotMap = RobinMap<std::string, Slot>;
-    using Endpoint = typename HttpConn::Endpoint;
+    using Conn = HttpServerConn;
+    using Endpoint = typename Conn::Endpoint;
     using This = HttpApp;
   public:
     HttpApp(HttpServ *serv)
@@ -44,7 +45,7 @@ class HttpApp {
     void http_request(const std::string& path, Slot slot) { slot_map_[path] = slot; }
 
   protected:
-    void on_accept(CyclTime now, HttpConn& conn) {
+    void on_accept(CyclTime now, Conn& conn) {
         conn.http_message(tb::bind<&This::on_http_message>(this));
     }
     void on_http_message(CyclTime now, const Endpoint& ep, const HttpRequest& req, HttpStream& os)

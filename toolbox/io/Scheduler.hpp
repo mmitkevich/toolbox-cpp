@@ -8,6 +8,7 @@
 #include <toolbox/io/Timer.hpp>
 #include <toolbox/io/State.hpp>
 #include <toolbox/io/Handle.hpp>
+#include <thread>
 
 namespace toolbox {
 inline namespace io {
@@ -15,13 +16,6 @@ inline namespace io {
 constexpr Duration NoTimeout{-1};
 enum class Priority { High = 0, Low = 1 };
 
-/// schedules timers
-class IScheduler : public IWaker {
-public:
-    virtual ~IScheduler() = default;
-    virtual Timer timer(MonoTime expiry, Duration interval, Priority priority, TimerSlot slot) = 0;
-    virtual Timer timer(MonoTime expiry, Priority priority, TimerSlot slot) = 0;
-};
 
 class Scheduler {
 public:
@@ -39,12 +33,15 @@ public:
     Scheduler(Scheduler&&) = delete;
     Scheduler& operator=(Scheduler&&) = delete;
 
+
     /// Throws std::bad_alloc only.
-    [[nodiscard]] Timer timer(MonoTime expiry, Duration interval, Priority priority, TimerSlot slot) {
+    [[nodiscard]] 
+    Timer timer(MonoTime expiry, Duration interval, Priority priority, TimerSlot slot) {
         return timers(priority).insert(expiry, interval, slot);
     }
     /// Throws std::bad_alloc only.
-    [[nodiscard]] Timer timer(MonoTime expiry, Priority priority, TimerSlot slot) {
+    [[nodiscard]] 
+    Timer timer(MonoTime expiry, Priority priority, TimerSlot slot) {
         return timers(priority).insert(expiry, slot);
     }
     
@@ -53,6 +50,24 @@ public:
           state(State::Stopping);
           stop_.store(true, std::memory_order_release);
       }
+    }
+
+    // clang-format on
+    void add_hook(Hook& hook) noexcept { hooks_.push_back(hook); }
+    HookList& hooks() noexcept { return hooks_; }
+    void run()
+    {
+        state(State::Starting);
+        state(State::Started);
+        while (!stop_.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+            auto now = CyclTime::now();
+            if(0==timers(Priority::High).dispatch(now)) {
+                timers(Priority::Low).dispatch(now);
+            }
+        }
+        state(State::Stopping);
+        state(State::Stopped);
     }
     
     MonoTime next_expiry(MonoTime next) const {
@@ -95,6 +110,7 @@ protected:
     std::atomic<State> state_{State::Stopped};
     TimerPool tp_;
     std::array<TimerQueue, 2> tqs_{tp_, tp_};
+    HookList hooks_;    
 };
 
 }// io

@@ -84,6 +84,31 @@ inline std::ostream& operator<<(std::ostream& os, const HttpRequest& req) {
     return os;
 }
 
+class TOOLBOX_API HttpResponse {
+  public:
+    HttpResponse() = default;
+    ~HttpResponse() = default;
+
+    // Copy.
+    HttpResponse(const HttpResponse&) = delete;
+    HttpResponse& operator=(const HttpResponse&) = delete;
+
+    // Move.
+    HttpResponse(HttpResponse&&) = delete;
+    HttpResponse& operator=(HttpResponse&&) = delete;
+  public:
+    void reset() {
+        headers_.clear();
+        status_ = {};
+    }
+    const HttpHeaders& headers() const noexcept { return headers_; }
+    const std::string& status() const noexcept { return status_; }
+    void status(std::string_view val) { status_ = val; }
+  private:
+    HttpHeaders headers_;
+    std::string status_;
+};
+
 } // namespace http
 } // namespace toolbox
 

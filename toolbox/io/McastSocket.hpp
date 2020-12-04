@@ -17,7 +17,7 @@
 #pragma once
 
 #include "toolbox/io/Buffer.hpp"
-#include "toolbox/io/ReactorHandle.hpp"
+#include "toolbox/io/PollHandle.hpp"
 #include "toolbox/net/DgramSock.hpp"
 #include "toolbox/sys/Error.hpp"
 #include <exception>
@@ -31,17 +31,16 @@ namespace toolbox {
 inline namespace io {
 
 
-template<typename SockT, typename DerivedT>
-class BasicMcastSocket : public BasicSocket<SockT, DerivedT> {
-    using This = BasicMcastSocket<SockT, DerivedT>;
-    using Base = BasicSocket<SockT, DerivedT>;
+template<typename SockT, typename PollT, typename DerivedT>
+class BasicMcastSocket : public BasicSocket<SockT, PollT, DerivedT> {
+    using This = BasicMcastSocket<SockT, PollT,  DerivedT>;
+    using Base = BasicSocket<SockT, PollT, DerivedT>;
   public:
-    using Sock = typename Base::Sock;
-    using Protocol = typename Sock::Protocol;
-    using Endpoint = typename Sock::Endpoint;
+    using typename Base::Sock, typename Base::PollHandle;
+    using typename Base::Protocol, typename Base::Endpoint;
   public:
     using Base::Base;
-    using Base::sock, Base::reactor;
+    using Base::sock, Base::poll;
     using Base::open, Base::bind;
     using Base::read, Base::write, Base::recv; 
 
@@ -55,16 +54,16 @@ class BasicMcastSocket : public BasicSocket<SockT, DerivedT> {
     }
 };
 
-class McastSocket: public BasicMcastSocket<McastSock, McastSocket>
+class McastSocket: public BasicMcastSocket<McastSock, PollHandle, McastSocket>
 {
-    using Base = BasicMcastSocket<McastSock, McastSocket>;
+    using Base = BasicMcastSocket<McastSock, PollHandle, McastSocket>;
 public:
     using Sock = typename Base::Sock;
     using Protocol = typename Sock::Protocol;
     using Endpoint = typename Sock::Endpoint;
 public:
     using Base::Base;
-    using Base::sock, Base::reactor;
+    using Base::sock, Base::poll;
     using Base::open, Base::bind;
     using Base::read, Base::write, Base::recv; 
     using Base::join_group, Base::leave_group;

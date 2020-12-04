@@ -37,9 +37,7 @@ class TOOLBOX_API IWaker {
     IWaker(IWaker&&) noexcept = default;
     IWaker& operator=(IWaker&&) noexcept = default;
 */
-    void wakeup() noexcept { on_wakeup(); }
-  protected:
-    virtual void on_wakeup() noexcept = 0;
+    virtual void wakeup() noexcept = 0;
 };
 
 } // namespace io

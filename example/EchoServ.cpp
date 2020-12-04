@@ -15,7 +15,7 @@
 // limitations under the License.
 
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/ReactorHandle.hpp"
+#include "toolbox/io/PollHandle.hpp"
 #include <toolbox/io.hpp>
 #include <toolbox/net.hpp>
 #include <toolbox/sys.hpp>
@@ -36,13 +36,15 @@ class EchoConn {
     using AutoUnlinkOption = boost::intrusive::link_mode<boost::intrusive::auto_unlink>;
 
   public:
-    template <typename EndpointT>
+
+    template<typename EndpointT>
     EchoConn(CyclTime now, Reactor& r, IoSock&& sock, const EndpointT& ep)
     : reactor_{r}
     , sock_{move(sock)}
+    , poll_{*sock_, r.ctl(*sock)}
     , ep_{ep}
     {
-        sub_ = r.subscribe(sock_.get(), PollEvents::Read, bind<&EchoConn::on_input>(this));
+        poll_.add(PollEvents::Read, bind<&EchoConn::on_input>(this));
         tmr_ = r.timer(now.mono_time() + IdleTimeout, Priority::Low,
                        bind<&EchoConn::on_timer>(this));
     }
@@ -95,8 +97,8 @@ class EchoConn {
     }
     Reactor& reactor_;
     IoSock sock_;
+    PollHandle poll_;    
     const StreamEndpoint ep_;
-    Reactor::Handle sub_;
     Buffer buf_;
     Timer tmr_;
 };

@@ -67,8 +67,8 @@ class StreamConnector {
             if (ec.value() != EINPROGRESS) {
                 throw std::system_error{ec, "connect"};
             }
-            sub_
-                = r.subscribe(*sock, PollEvents::Read + PollEvents::Write, bind<&StreamConnector::on_io_event>(this));
+            sub_ = PollHandle{*sock, r.ctl(*sock)};
+            sub_.add(PollEvents::Read + PollEvents::Write, bind<&StreamConnector::on_io_event>(this));
             ep_ = ep;
             sock_ = std::move(sock);
             return false;
@@ -98,7 +98,7 @@ class StreamConnector {
 protected:
     Endpoint ep_;
     StreamSockClnt sock_;
-    Reactor::Handle sub_;
+    PollHandle sub_;
 };
 
 } // namespace net

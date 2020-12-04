@@ -1,3 +1,4 @@
+#include "toolbox/io/Reactor.hpp"
 #include "toolbox/io/Runner.hpp"
 #include "toolbox/net/Endpoint.hpp"
 #include "toolbox/net/StreamSock.hpp"
@@ -16,20 +17,20 @@ using namespace std::string_literals;
 using namespace toolbox;
 namespace tb = toolbox;
 
-class HttpClnt {
+class HttpClnt2 {
   public:
     using Socket = StreamSocket;
     using Endpoint = typename Socket::Endpoint;
     using Protocol = typename Socket::Protocol;
-    using This = HttpClnt;
+    using This = HttpClnt2;
   public:
-    HttpClnt(tb::Reactor& reactor)
-    : sock_(reactor) {
-
-    }
+    HttpClnt2(tb::IReactor& r)
+    : reactor_(r) 
+    {}
+    
     void open(const Endpoint& ep) {
         endpoint_ = ep;
-        sock_.open(ep.protocol());
+        sock_.open(ep.protocol(), reactor_);
         sock_.connect(ep, tb::bind<&This::on_connected>(this));
     }
     void close() {
@@ -40,7 +41,7 @@ class HttpClnt {
     void stop() {
         close();
         TOOLBOX_DEBUG<<"stop";
-        sock_.reactor().stop();
+        reactor_.stop();
     }
     
     static constexpr std::string_view Request = "GET /foo HTTP/1.1\r\n\r\n";
@@ -85,6 +86,7 @@ class HttpClnt {
     }
   private:
     Socket sock_;
+    tb::IReactor& reactor_;
     Endpoint endpoint_;    
     Buffer input_;
     Buffer output_;
@@ -92,8 +94,8 @@ class HttpClnt {
 };
 
 int main(int argc, char* argv[]) {
-    tb::Reactor reactor{1024};
-    HttpClnt clnt(reactor);
+    tb::ReactorImpl<tb::Reactor> reactor{1024};
+    HttpClnt2 clnt(reactor);
     auto ep = tb::parse_stream_endpoint("tcp4://127.0.0.1:8888");
     clnt.open(ep);
     reactor.run();

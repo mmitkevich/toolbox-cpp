@@ -18,7 +18,7 @@
 #define TOOLBOX_HTTP_CONN_HPP
 
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/ReactorHandle.hpp"
+#include "toolbox/io/PollHandle.hpp"
 #include <exception>
 #include <toolbox/http/Parser.hpp>
 #include <toolbox/http/Request.hpp>
@@ -36,16 +36,18 @@ namespace toolbox {
 inline namespace http {
 class HttpAppBase;
 
-template <typename RequestT>
+template <typename RequestT, typename ResponseT, bool IsClient>
 class BasicHttpConn
 : public MemAlloc
-, public BasicDisposer<BasicHttpConn<RequestT>>
-, BasicHttpParser<BasicHttpConn<RequestT>> {
+, public BasicDisposer<BasicHttpConn<RequestT, ResponseT, IsClient>>
+, BasicHttpParser<BasicHttpConn<RequestT, ResponseT, IsClient>> {
 
-    friend class BasicDisposer<BasicHttpConn<RequestT>>;
-    friend class BasicHttpParser<BasicHttpConn<RequestT>>;
+    using This = BasicHttpConn<RequestT, ResponseT, IsClient>;
+    friend class BasicDisposer<This>;
+    friend class BasicHttpParser<This>;
     using Request = RequestT;
-    using This = BasicHttpConn<RequestT>;
+    using Response = ResponseT;
+
     using Parser = BasicHttpParser<This>;
     // Automatically unlink when object is destroyed.
     using AutoUnlinkOption = boost::intrusive::link_mode<boost::intrusive::auto_unlink>;
@@ -62,11 +64,12 @@ class BasicHttpConn
 
     BasicHttpConn(CyclTime now, Reactor& r, IoSock&& sock, const Endpoint& ep)
     : Parser{HttpType::Request}
-    , reactor_{r}
+    , reactor_(r)
     , sock_{std::move(sock)}
     , ep_{ep}
+    , sub_(sock_.get(), r.ctl(sock_.get()))
     {
-        sub_ = r.subscribe(*sock_, PollEvents::Read, bind<&BasicHttpConn::on_io_event>(this));
+        sub_.add(PollEvents::Read, bind<&BasicHttpConn::on_io_event>(this));
         schedule_timeout(now);
         on_http_connect(now, ep_);
     }
@@ -98,10 +101,13 @@ class BasicHttpConn
     void http_message(Slot<CyclTime, const Endpoint&, const HttpRequest&, HttpStream&> slot) {
         http_message_ = slot;
     }
+    void http_response(Slot<CyclTime, const HttpResponse&, HttpStream&> slot) {
+        http_response_ = slot;
+    }
 
     void http_request(HttpRequest&& req) {
         req_ = std::move(req);
-        reqs_.http_request(req.method(), req.url(), req.headers());
+        ins_.http_request(req.method(), req.url(), req.headers());
     }
 protected:
     void on_http_connect(CyclTime now, const Endpoint& ep) {
@@ -158,24 +164,31 @@ protected:
             req_.append_url(sv);
             ret = true;
         } catch (const std::exception& e) {
-            on_http_error(now, ep_, e, resp_);
+            on_http_error(now, ep_, e, outs_);
             this->dispose(now);
         }
         return ret;
     }
     bool on_status(CyclTime now, std::string_view sv) noexcept
     {
-        // Only supported for HTTP responses.
+         // Only supported for HTTP responses.
+        resp_.reset();
+        resp_.status(sv);
+        http_response_(now, resp_, ins_);
         return false;
     }
     bool on_header_field(CyclTime now, std::string_view sv, First first) noexcept
     {
         bool ret{false};
         try {
-            req_.append_header_field(sv, first);
+            if constexpr(IsClient) {
+                resp_.append_header_field(sv, first);
+            } else {
+                req_.append_header_field(sv, first);
+            }
             ret = true;
         } catch (const std::exception& e) {
-            on_http_error(now, ep_, e, resp_);
+            on_http_error(now, ep_, e, outs_);
             this->dispose(now);
         }
         return ret;
@@ -184,17 +197,25 @@ protected:
     {
         bool ret{false};
         try {
-            req_.append_header_value(sv, first);
+            if constexpr(IsClient) {
+                req_.append_header_value(sv, first);
+            } else {
+                req_.append_header_value(sv, first);
+            }
             ret = true;
         } catch (const std::exception& e) {
-            on_http_error(now, ep_, e, resp_);
+            on_http_error(now, ep_, e, outs_);
             this->dispose(now);
         }
         return ret;
     }
     bool on_headers_end(CyclTime now) noexcept
     {
-        req_.set_method(method());
+        if constexpr(IsClient) {
+            
+        } else {
+            req_.set_method(method());
+        }
         return true;
     }
     bool on_body(CyclTime now, std::string_view sv) noexcept
@@ -204,7 +225,7 @@ protected:
             req_.append_body(sv);
             ret = true;
         } catch (const std::exception& e) {
-            on_http_error(now, ep_, e, resp_);
+            on_http_error(now, ep_, e, outs_);
             this->dispose(now);
         }
         return ret;
@@ -215,10 +236,10 @@ protected:
         try {
             in_progress_ = false;
             req_.flush(); // May throw.
-            on_http_message(now, ep_, req_, resp_);
+            on_http_message(now, ep_, req_, outs_);
             ret = true;
         } catch (const std::exception& e) {
-            on_http_error(now, ep_, e, resp_);
+            on_http_error(now, ep_, e, outs_);
             this->dispose(now);
         }
         return ret;
@@ -252,7 +273,7 @@ protected:
             // Do not call on_http_error() here, because it will have already been called in one of
             // the noexcept parser callback functions.
         } catch (const std::exception& e) {
-            on_http_error(now, ep_, e, resp_);
+            on_http_error(now, ep_, e, outs_);
             this->dispose(now);
         }
     }
@@ -303,12 +324,12 @@ protected:
             }
             if (write_blocked_) {
                 // Restore read-only state after the buffer has been drained.
-                sub_.resubscribe(PollEvents::Read);
+                sub_.events(PollEvents::Read);
                 write_blocked_ = false;
             }
         } else if (!write_blocked_) {
             // Set the state to read-write if the entire buffer could not be written.
-            sub_.resubscribe(PollEvents::Read + PollEvents::Write);
+            sub_.events(PollEvents::Read + PollEvents::Write);
             write_blocked_ = true;
         }
     }
@@ -325,8 +346,9 @@ protected:
     Timer tmr_;
     Buffer in_, out_;
     Request req_;
-    HttpStream reqs_{in_};
-    HttpStream resp_{out_};
+    Response resp_;
+    HttpStream ins_{in_};
+    HttpStream outs_{out_};
     bool in_progress_{false}, write_blocked_{false};
 
     Slot<CyclTime, const Endpoint&> http_connect_;
@@ -334,9 +356,11 @@ protected:
     Slot<CyclTime, const Endpoint&, const std::exception&, HttpStream&> http_error_;
     Slot<CyclTime, const Endpoint&> http_timeout_;
     Slot<CyclTime, const Endpoint&, const HttpRequest&, HttpStream&> http_message_;
+    Slot<CyclTime, const HttpResponse&, HttpStream&> http_response_;
 };
 
-using HttpConn = BasicHttpConn<HttpRequest>;
+using HttpServerConn = BasicHttpConn<HttpRequest, HttpResponse, false>;
+using HttpConn = BasicHttpConn<HttpRequest, HttpResponse, true>;
 
 } // namespace http
 } // namespace toolbox

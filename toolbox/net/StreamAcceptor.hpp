@@ -33,11 +33,12 @@ class StreamAcceptor {
 
     StreamAcceptor(Reactor& r, const Endpoint& ep)
     : serv_{ep.protocol()}
+    , sub_{serv_.get(), r.ctl(serv_.get())}
     {
         serv_.set_reuse_addr(true);
         serv_.bind(ep);
         serv_.listen(SOMAXCONN);
-        sub_ = r.subscribe(*serv_, PollEvents::Read, bind<&StreamAcceptor::on_io_event>(this));
+        sub_.add(PollEvents::Read, bind<&StreamAcceptor::on_io_event>(this));
     }
 
     // Copy.
