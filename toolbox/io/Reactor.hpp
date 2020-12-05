@@ -128,6 +128,7 @@ public:
     PollHandle subscribe(FD fd, PollEvents events, IoSlot slot) {
         PollHandle handle{fd, ctl(fd)};
         handle.add(events, slot);
+        handle.commit();
         return handle;
     }
 

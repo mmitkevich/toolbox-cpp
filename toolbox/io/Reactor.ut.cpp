@@ -101,7 +101,8 @@ BOOST_AUTO_TEST_CASE(ReactorEdgeCase)
     BOOST_TEST(h->matches == 1);
 
     // Revert to level-triggered.
-    sub.mod(PollEvents::Read);
+    sub.del(PollEvents::ET);
+    sub.commit();
     BOOST_TEST(r.poll(now, 0ms) == 1);
     BOOST_TEST(h->matches == 2);
 

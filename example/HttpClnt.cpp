@@ -47,7 +47,7 @@ class HttpClnt2 {
     static constexpr std::string_view Request = "GET /foo HTTP/1.1\r\n\r\n";
 
     void on_connected(std::error_code ec) {
-        TOOLBOX_DEBUG<<"connected, ep:" <<endpoint_<<", ec:"<<ec;
+        TOOLBOX_DEBUG<<"connected, ep:" <<endpoint_<<", ec:"<<ec<<", fd:"<<sock_.sock().get();
         if(ec) {
             stop();
         }
@@ -62,9 +62,10 @@ class HttpClnt2 {
     }
 
     void on_sent(ssize_t size, std::error_code ec) {
-        assert(size>=0);
-        output_.commit(size);
-        output_.consume(size);
+        if(size>=0) {
+            output_.commit(size);
+            output_.consume(size);
+        }
         TOOLBOX_INFO<<count_<<" sent: " << size <<" ec:"<<ec;
         sock_.read(input_.prepare(2397), tb::bind<&This::on_recv>(this));
     }

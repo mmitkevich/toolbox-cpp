@@ -225,6 +225,7 @@ class TOOLBOX_API Epoll {
             }
             timeout_ = timeout;
         }
+        TOOLBOX_DUMP<<"epoll_wait timeout=-1";
         ready_ =  os::epoll_wait(*epfd_, events_.data(), (int)events_.size(), -1, ec);
         return ready_;
     }
@@ -243,13 +244,14 @@ class TOOLBOX_API Epoll {
             }
             timeout_ = timeout;
         }
+        TOOLBOX_DUMP<<"epoll_wait timeout="<<timeout;
         // Do not block if timer is zero.
         ready_ =  os::epoll_wait(*epfd_, events_.data(), (int)events_.size(), is_zero(timeout) ? 0 : -1, ec);
         return ready_;
     }
 
     /// modifies subscription
-    bool ctl(PollHandle& hanle);
+    bool ctl(PollHandle& handle);
 
     int dispatch(CyclTime now);
     
@@ -263,6 +265,7 @@ private:
     {
         Event ev;
         mod(ev, fd, sid, events);
+        TOOLBOX_DUMP<<"epoll_ctl_add fd="<<fd<<" ev="<<std::hex<<(unsigned)ev.events<<std::dec;
         os::epoll_ctl(*epfd_, EPOLL_CTL_ADD, fd, ev);
     }
     void del(FD fd)
@@ -270,6 +273,7 @@ private:
         // In kernel versions before 2.6.9, the EPOLL_CTL_DEL operation required a non-null pointer
         // in event, even though this argument is ignored.
         Event ev{};
+        TOOLBOX_DUMP<<"epoll_ctl_del fd="<<fd<<" ev="<<std::hex<<(unsigned)ev.events<<std::dec;
         os::epoll_ctl(*epfd_, EPOLL_CTL_DEL, fd, ev);
     }
     /// throws system_error
@@ -277,10 +281,11 @@ private:
     {
         Event ev;
         mod(ev, fd, sid, events);
+        TOOLBOX_DUMP<<"epoll_ctl_mod fd="<<fd<<" ev="<<std::hex<<(unsigned)ev.events<<std::dec;
         os::epoll_ctl(*epfd_, EPOLL_CTL_MOD, fd, ev);
     }
-    static uint32_t to_epoll_events(PollEvents events) {
-        uint32_t result = 0;
+    uint32_t to_epoll_events(PollEvents events) {
+        uint32_t result = epoll_mode_;
         if(events & PollEvents::Read)
             result |= EpollIn;
         if(events & PollEvents::Write)
@@ -291,7 +296,7 @@ private:
             result |= EpollEt;
         return result;
     }
-    static PollEvents from_epoll_events(uint32_t epoll_mask) {
+    PollEvents from_epoll_events(uint32_t epoll_mask) {
         PollEvents result = PollEvents::None;
         if(epoll_mask & EpollIn)
             result = (PollEvents)(result | PollEvents::Read);
@@ -301,10 +306,12 @@ private:
             result = (PollEvents)(result|PollEvents::Error);
         return result;
     }
-    static void mod(Event& ev, FD fd, int sid, PollEvents events) noexcept
+    void mod(Event& ev, FD fd, int sid, PollEvents events) noexcept
     {
-        ev.events = to_epoll_events(events);;
-        ev.data.u64 = static_cast<std::uint64_t>(sid) << 32 | fd;
+        auto epoll_events = to_epoll_events(events); 
+        auto u64 = static_cast<std::uint64_t>(sid) << 32 | fd;
+        ev.events = epoll_events;
+        ev.data.u64 = u64;
     }
     FileHandle epfd_;
     TimerFd<MonoClock> tfd_;
@@ -313,6 +320,8 @@ private:
     EventFd notify_{0, EFD_NONBLOCK};
     std::array<Event,MaxEvents> events_;
     std::size_t ready_{};
+    //unsigned epoll_mode_ {0};
+    unsigned epoll_mode_ {EpollEt};
 };
 
 } // namespace io

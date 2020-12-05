@@ -210,17 +210,20 @@ protected:
 
     /// basic io event handler
     void on_io_event(CyclTime now, os::FD fd, PollEvents events) {        
-        bool more;
+        bool again;
         do {
-            more = false;
+            again = false;
             // flush output
             if(events & PollEvents::Write) {
                 while(!write_.empty()) {
                     std::error_code ec {};
                     ssize_t size = sock_.write(write_.buffer(), ec);
-                    if(size>=0 || ec.value()!=EWOULDBLOCK) {
+                    if(size<0 && ec.value()==EWOULDBLOCK) {
+                        poll().add(PollEvents::Write);
+                        break;
+                    } else {
                         write_.complete(size, ec);
-                        more = true;
+                        again = true;
                     }
                 }
             }
@@ -237,13 +240,23 @@ protected:
                             size = sock_.read(read_.buffer(), ec);
                             break;
                     }
-                    if(size>=0 || ec.value()!=EWOULDBLOCK) {
+                    if(size<0 && ec.value()==EWOULDBLOCK) {
+                        poll().add(PollEvents::Read);
+                        break;
+                    } else {
                         read_.complete(size, ec);
-                        more = true;
+                        again = true;
                     }
                 }
             }
-        } while(more);
+        } while(again);
+        if(write_.empty()) {
+            poll().del(PollEvents::Write);
+        }
+        //if(read_.empty()) {
+        //    poll().del(PollEvents::Read);
+        //}
+        poll().commit();
     }
 protected:
     SocketState state_ {SocketState::Disconnected};

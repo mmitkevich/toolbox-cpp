@@ -50,7 +50,8 @@ public:
         if(!conn_.empty()) {
             throw std::system_error{make_error_code(std::errc::operation_in_progress), "connect"};
         }
-        poll().mod(PollEvents::Read + PollEvents::Write, conn_slot());
+        poll().add(PollEvents::Write, conn_slot());
+        poll().commit();
         std::error_code ec {};
         sock().connect(ep, ec);
         if (ec && ec.value() != EINPROGRESS) { //ec != std::errc::operation_in_progress
@@ -59,6 +60,7 @@ public:
         conn_ = {SockOpId::Connect, slot};
         if(!ec) {
             poll().mod(impl().io_slot());
+            poll().commit();
             conn_.complete(ec);
         }
     }
@@ -75,17 +77,17 @@ public:
     IoSlot conn_slot() { return util::bind<&DerivedT::on_conn_event>(this); }
     void on_conn_event(CyclTime now, os::FD fd, PollEvents events) {
         //assert(state_==SocketState::Connecting);
-        if(conn_.empty())
-            return; // in case we got error but didn't close
-        if((events & PollEvents::Error)) {
-            std::error_code ec = sock().get_error();
-            state(SocketState::Disconnected);
+        if(!conn_.empty()) {
+            std::error_code ec{};
+            if((events & PollEvents::Error)) {
+                ec = sock().get_error();
+                state(SocketState::Disconnected);
+            } else if((events & PollEvents::Write)) {
+                state(SocketState::Connected);
+            }
+            poll().del(PollEvents::Write, io_slot());   
             conn_.complete(ec);
-        } else if((events & PollEvents::Write)) {
-            std::error_code ec {};
-            state(SocketState::Connected);
-            poll().mod(PollEvents::Read, io_slot());   
-            conn_.complete(ec);
+            poll().commit();
         }
     }
 protected:

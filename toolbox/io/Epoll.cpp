@@ -26,6 +26,10 @@ using namespace toolbox::io;
 bool Epoll::ctl(PollHandle& handle) {
     auto fd = handle.fd();
     auto ix = static_cast<std::size_t>(fd);
+    auto events = handle.events();
+    if(epoll_mode_&EpollEt) {
+        events = events + PollEvents::Read + PollEvents::Write;
+    }
     if(handle.empty()) {
         if(ix<data_.size()) {
             del(fd);
@@ -40,13 +44,15 @@ bool Epoll::ctl(PollHandle& handle) {
         auto& ref = data_[ix];
         if(ref.empty()) {
             handle.next_sid();                          // initial subscribe            
-            add(fd, handle.sid(), handle.events());     // throws on error
+            add(fd, handle.sid(), events);     // throws on error
             ref = handle;                               // commit
         } else if(ref.sid()!=handle.sid()) { 
             return false;
         } else {
-            mod(fd, handle.sid(), handle.events());     // throws on error
-            ref.events(handle.events());                // commit
+            if(events!=ref.events()) {
+                mod(fd, handle.sid(), events);     // throws on error
+            }
+            ref.events(events);                // commit
             ref.slot(handle.slot());
         }
     }
@@ -87,7 +93,9 @@ int Epoll::dispatch(CyclTime now)
 
         try {
             assert(s!=nullptr);
-            s.invoke(now, fd, from_epoll_events(events));
+            auto evs = from_epoll_events(events);
+            TOOLBOX_DUMP<<"epoll_ready fd="<<fd<<" events="<<evs;
+            s.invoke(now, fd, evs);
         } catch (const std::exception& e) {
             TOOLBOX_ERROR << "error handling io event: " << e.what();
         }

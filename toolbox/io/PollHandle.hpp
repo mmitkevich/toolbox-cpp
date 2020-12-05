@@ -6,6 +6,7 @@
 #include <toolbox/io/Handle.hpp>
 #include <toolbox/util/Enum.hpp>
 #include <toolbox/io/Scheduler.hpp>
+#include <toolbox/sys/Log.hpp>
 
 namespace toolbox {
 inline namespace io {
@@ -32,7 +33,11 @@ inline std::ostream& operator<<(std::ostream& os, PollEvents val) {
     if(val & PollEvents::Read)
         os << " Read";
     if(val & PollEvents::Write)
-        os <<" Write";
+        os << " Write";
+    if(val & PollEvents::ET)
+        os<<" ET";
+    if(!val)
+        os<<" None";
     os << "\"";
     return os;
 }
@@ -170,7 +175,8 @@ public:
     void del(PollEvents events) noexcept {
         if(events_ & events) {
             events_ = events_ - events;
-            commit();
+            //commit();
+            pending_commit_ = true;
         }
     }
 
@@ -179,19 +185,25 @@ public:
         if((events_ & events) || (slot != slot_)) {
             events_ = events_ - events;
             slot_ = slot;
-            commit();
+            //commit();
+            pending_commit_ = true;
         }
     }
-
+    [[noinline]]
     void commit() noexcept {
-        ctl_(*this);
+        if(pending_commit_) {
+            //TOOLBOX_DEBUG<<"poll_commit "<<events_;
+            ctl_(*this);
+            pending_commit_ = false;
+        }
     }
 
     /// adds events, keep slot
     void add(PollEvents events) noexcept {
         if((events_ & events) != events) {
-            events_ = events + events;
-            commit();
+            events_ = events_ + events;
+            if(slot_)
+                pending_commit_ = true;
         }
     }
     /// adds events, change slot
@@ -199,15 +211,16 @@ public:
         if(slot!=slot_ || (events_ & events) != events) {
             slot_ = slot;
             events_ = events_ + events;
-            commit();
+            pending_commit_ = true;
         }
     }
-    
+
+/* 
     /// change events
     void mod(PollEvents events) {
         if(events_!=events) {
             events_ = events;
-            commit();
+            pending_commit_ = true;
         }
     }
     /// change events and slot
@@ -215,19 +228,21 @@ public:
         if(events_!=events || slot!=slot_) {
             slot_ = slot;
             events_ = events;
-            commit();
+            pending_commit_ = true;
         }
     }
+*/
     /// change slot
     void mod(IoSlot slot) noexcept {
         if(slot_!=slot) {
             slot_ = slot;
-            commit();
+            pending_commit_ = true;
         }
     }
     IoSlot slot() const noexcept { return slot_; }
 protected:
     PollSlot ctl_{};
+    bool pending_commit_ {false};
 };
 
 }
