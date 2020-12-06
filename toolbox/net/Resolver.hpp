@@ -17,7 +17,7 @@
 #ifndef TOOLBOX_NET_RESOLVER_HPP
 #define TOOLBOX_NET_RESOLVER_HPP
 
-#include <toolbox/net/Socket.hpp>
+#include <toolbox/net/Sock.hpp>
 #include <toolbox/sys/Time.hpp>
 
 #include <cassert>

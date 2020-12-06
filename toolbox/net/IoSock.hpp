@@ -17,7 +17,7 @@
 #ifndef TOOLBOX_NET_IOSOCK_HPP
 #define TOOLBOX_NET_IOSOCK_HPP
 
-#include <toolbox/net/Socket.hpp>
+#include <toolbox/net/Sock.hpp>
 
 namespace toolbox {
 inline namespace net {

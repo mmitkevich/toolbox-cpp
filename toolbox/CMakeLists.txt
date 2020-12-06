@@ -84,7 +84,7 @@ set(lib_SOURCES
   net/RateLimit.cpp
   net/Resolver.cpp
   net/Runner.cpp
-  net/Socket.cpp
+  net/Sock.cpp
   net/StreamAcceptor.cpp
   net/StreamConnector.cpp
   net/StreamSock.cpp

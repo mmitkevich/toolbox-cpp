@@ -30,39 +30,71 @@
 namespace toolbox {
 inline namespace net {
 
-template<typename SockT, typename PollT, typename DerivedT>
-class BasicStreamSocket : public BasicSocket<SockT, PollT, DerivedT> {
-    using This = BasicStreamSocket<SockT, PollT, DerivedT>;
-    using Base = BasicSocket<SockT, PollT, DerivedT>;
+
+template<typename SocketT>
+class SocketConnect : public CompletionSlot<std::error_code> {
+    using Base=CompletionSlot<std::error_code>;
+  public:
+    using Socket=SocketT;
+    using Endpoint=typename Socket::Endpoint;
+    using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot, Base::reset;
+
+    bool prepare(Socket& socket, const Endpoint& ep, Slot slot) {
+        if(*this) {
+            throw std::system_error { make_error_code(std::errc::operation_in_progress), "connect" };
+        }
+        set_slot(slot);
+        std::error_code ec {};
+        socket.connect(ep, ec);
+        if (ec.value() == EINPROGRESS) { //ec != std::errc::operation_in_progress
+            socket.poll().add(PollEvents::Write);
+            return false;
+        }
+        if (ec) {
+            throw std::system_error{ec, "connect"};
+        }
+        return true;
+    }
+    bool complete(Socket& socket, PollEvents events) {
+        std::error_code ec{};
+        if((events & PollEvents::Error)) {
+            ec = socket.get_error();
+            socket.state(SocketState::Disconnected);
+        } else if((events & PollEvents::Write)) {
+            socket.state(SocketState::Connected);
+        }
+        socket.poll().del(PollEvents::Write);   
+        notify(ec); // they could start read/write, etc
+        return true; // all done
+    }
+};
+
+template<typename SockT>
+class BasicStreamSocket : public BasicSocket<SockT> {
+    using This = BasicStreamSocket<SockT>;
+    using Base = BasicSocket<SockT>;
 public:
-    using Sock = SockT;
     using typename Base::PollHandle;
     using typename Base::Endpoint;
 public:
     using Base::Base;
 
-    using Base::state, Base::sock, Base::poll, Base::impl;
+    using Base::state, Base::poll;
     using Base::read, Base::write, Base::recv;
 
-    void connect(const Endpoint& ep, Slot<std::error_code> slot) {
+    template<typename HandlerT>
+    void async_connect(const Endpoint& ep, HandlerT&& handler) {
+        async_connect(ep, util::bind<HandlerT>());
+    }
+    void async_connect(const Endpoint& ep, Slot<std::error_code> slot) {
         state(SocketState::Connecting);
 
-        if(!conn_.empty()) {
-            throw std::system_error{make_error_code(std::errc::operation_in_progress), "connect"};
+        if(!conn_.prepare(*this, ep, slot)) {
+            poll().mod(conn_slot());            // async
+        } else {
+            poll().mod(io_slot());              // sync
         }
-        poll().add(PollEvents::Write, conn_slot());
         poll().commit();
-        std::error_code ec {};
-        sock().connect(ep, ec);
-        if (ec && ec.value() != EINPROGRESS) { //ec != std::errc::operation_in_progress
-            throw std::system_error{ec, "connect"};
-        }
-        conn_ = {SockOpId::Connect, slot};
-        if(!ec) {
-            poll().mod(impl().io_slot());
-            poll().commit();
-            conn_.complete(ec);
-        }
     }
     
   protected:
@@ -74,36 +106,19 @@ public:
             set_tcp_no_delay(sock.get(), true);
         }
     }
-    IoSlot conn_slot() { return util::bind<&DerivedT::on_conn_event>(this); }
+    IoSlot conn_slot() { return util::bind<&This::on_conn_event>(this); }
     void on_conn_event(CyclTime now, os::FD fd, PollEvents events) {
-        //assert(state_==SocketState::Connecting);
-        if(!conn_.empty()) {
-            std::error_code ec{};
-            if((events & PollEvents::Error)) {
-                ec = sock().get_error();
-                state(SocketState::Disconnected);
-            } else if((events & PollEvents::Write)) {
-                state(SocketState::Connected);
-            }
-            poll().del(PollEvents::Write, io_slot());   
-            conn_.complete(ec);
-            poll().commit();
+        if(conn_) {
+            poll().mod(io_slot());   
+            poll().commit();         
+            conn_.complete(*this, events);
         }
     }
 protected:
-    SockOp conn_;
+    SocketConnect<This> conn_;
 };
 
-class StreamSocket  : public BasicStreamSocket<StreamSockClnt, PollHandle, StreamSocket> {
-  using Base = BasicStreamSocket<StreamSockClnt, PollHandle, StreamSocket>;
-public:
-  using Sock = typename Base::Sock;
-  using PollHandle = typename Base::PollHandle;
-public:
-  using Base::Base;
-  using Base::state, Base::sock, Base::poll;
-  using Base::read, Base::write, Base::recv;
-};
+using StreamSocket = BasicStreamSocket<StreamSockClnt>;
 
 } // namespace net
 } // namespace toolbox

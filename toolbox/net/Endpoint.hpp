@@ -21,7 +21,7 @@
 #include <cstdint>
 #include <sys/socket.h>
 #include <toolbox/net/Protocol.hpp>
-#include <toolbox/net/Socket.hpp>
+#include <toolbox/net/Sock.hpp>
 #include <toolbox/util/TypeTraits.hpp>
 
 #include <boost/asio/generic/basic_endpoint.hpp>

@@ -30,8 +30,8 @@ class HttpClnt2 {
     
     void open(const Endpoint& ep) {
         endpoint_ = ep;
-        sock_.open(ep.protocol(), reactor_);
-        sock_.connect(ep, tb::bind<&This::on_connected>(this));
+        sock_.open(reactor_, ep.protocol());
+        sock_.async_connect(ep, tb::bind<&This::on_connected>(this));
     }
     void close() {
         TOOLBOX_DEBUG<<"close";
@@ -47,7 +47,7 @@ class HttpClnt2 {
     static constexpr std::string_view Request = "GET /foo HTTP/1.1\r\n\r\n";
 
     void on_connected(std::error_code ec) {
-        TOOLBOX_DEBUG<<"connected, ep:" <<endpoint_<<", ec:"<<ec<<", fd:"<<sock_.sock().get();
+        TOOLBOX_DEBUG<<"connected, ep:" <<endpoint_<<", ec:"<<ec<<", fd:"<<sock_.get();
         if(ec) {
             stop();
         }
@@ -58,7 +58,7 @@ class HttpClnt2 {
         TOOLBOX_DEBUG<<count_<<" send: " << req;
         auto buf = output_.prepare(req.size());
         std::memcpy(buf.data(), req.data(), req.size());
-        sock_.write({buf.data(), req.size()}, tb::bind<&This::on_sent>(this));
+        sock_.async_write({buf.data(), req.size()}, tb::bind<&This::on_sent>(this));
     }
 
     void on_sent(ssize_t size, std::error_code ec) {
@@ -67,7 +67,7 @@ class HttpClnt2 {
             output_.consume(size);
         }
         TOOLBOX_INFO<<count_<<" sent: " << size <<" ec:"<<ec;
-        sock_.read(input_.prepare(2397), tb::bind<&This::on_recv>(this));
+        sock_.async_read(input_.prepare(2397), tb::bind<&This::on_recv>(this));
     }
     void on_recv(ssize_t size, std::error_code ec) {
         assert(size>=0);
@@ -81,7 +81,7 @@ class HttpClnt2 {
         } else if(size==0) { // EOF
             stop();
         } else {
-            sock_.read(input_.prepare(2397), tb::bind<&This::on_recv>(this));
+            sock_.async_read(input_.prepare(2397), tb::bind<&This::on_recv>(this));
         }
         //sock_.read(input_.prepare(2397), tb::bind<&This::on_recv>(this));
     }

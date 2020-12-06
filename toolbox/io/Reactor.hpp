@@ -48,6 +48,9 @@ public:
     
     /// get poll function for FD
     virtual PollSlot ctl(os::FD fd) = 0;
+    PollHandle poll(os::FD fd) {
+        return PollHandle {fd, ctl(fd)};
+    }
 };
 
 template<typename ImplT>
@@ -124,12 +127,9 @@ public:
         return ctl;
     }
 
-    /// subscribes handle for events
-    PollHandle subscribe(FD fd, PollEvents events, IoSlot slot) {
-        PollHandle handle{fd, ctl(fd)};
-        handle.add(events, slot);
-        handle.commit();
-        return handle;
+    // get poll handle
+    PollHandle poll(FD fd) {
+        return PollHandle{fd, ctl(fd)};
     }
 
     /// event loop cycle

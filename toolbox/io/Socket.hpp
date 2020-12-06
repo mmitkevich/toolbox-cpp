@@ -9,15 +9,6 @@
 namespace toolbox {
 inline namespace io {
 
-enum class SockOpId {
-    None    = 0,
-    Connect = 1,
-    Accept  = 2,
-    Write   = 9,
-    Read    = 17,
-    Recv    = 18,
-};
-
 enum class SocketState {
     Disconnected = 0,
     Connecting = 1,
@@ -28,62 +19,25 @@ enum class SocketState {
     Listening = 6
 };
 
-class SockOpBase {
-public:
-    SockOpBase() = default;
-    explicit SockOpBase(SockOpId id)
-    : id_(id) {}
-protected:
-    SockOpId id_ {SockOpId::None};    
-};
 template<typename...ArgsT>
-class BasicSockOp : public SockOpBase {
+class CompletionSlot {
 public:    
     using Slot = util::Slot<ArgsT...>;
+
 public:
-    using SockOpBase::SockOpBase;
-    BasicSockOp(SockOpId id, Slot slot)
-    : SockOpBase(id) 
-    , slot_(slot)
-    {}
-public:
-    SockOpId id() const { return id_; }
-    void complete(ArgsT... args) { 
+    void notify(ArgsT... args) { 
         auto s = slot_;
         reset();
         s.invoke(std::forward<ArgsT>(args)...);
     }
-    void reset() { *this = {}; }
+    explicit operator bool() {return !empty(); }
     bool empty() const { return slot_.empty(); }
+    void reset() { slot_.reset(); }
+    explicit operator bool() const { return (bool)slot_; }
+    void set_slot(Slot val) { slot_ = val; }
 protected:
     Slot slot_ {};
 };
-
-using SockOp = BasicSockOp<std::error_code>;
-
-template<typename BufferT>
-class SockOpBuf : public BasicSockOp<ssize_t, std::error_code> {
-    using Base = BasicSockOp<ssize_t, std::error_code>;
-public:
-    using Buffer = BufferT;
-    using Slot = typename Base::Slot;
-public:
-    SockOpBuf() = default;
-    SockOpBuf(SockOpId id, Slot slot, Buffer buf, int flags=0)
-    : Base(id, slot)
-    , buf_(buf)
-    , flags_(flags) {}
-public:
-    using Base::complete;
-    using Base::reset;
-    using Base::empty;
-    Buffer& buffer() { return buf_; } 
-    int flags() { return flags_; }
-public:
-    Buffer buf_ {};
-    int flags_ {};
-};
-
 
 template<typename SockT>
 std::size_t read(SockT& sock, MutableBuffer& buffer, std::error_code& ec) {
@@ -100,33 +54,122 @@ std::size_t read(SockT& sock, MutableBuffer& buffer, std::error_code& ec) {
     return total_bytes_read;
 }
 
+template<typename SocketT>
+class SocketRead : public CompletionSlot<ssize_t, std::error_code> {
+    using Base=CompletionSlot<ssize_t, std::error_code>;
+  public:
+    using Buffer = MutableBuffer;
+    using Socket = SocketT;
+    using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot;
 
-/// BasiSocket = Socket + Sock impl
-template<typename SockT, typename PollT, typename DerivedT>
-class BasicSocket {
-    using This = BasicSocket<SockT, PollT, DerivedT>;
-public:
-    using Sock = SockT;
-    using PollHandle = PollT;
-    using Protocol = typename Sock::Protocol;
-    using Endpoint = typename Sock::Endpoint;
-public:
-    template<typename ReactorT>
-    explicit BasicSocket(Sock&& sock, ReactorT& r)
-    : sock_(std::move(sock))
-    , poll_(*sock_, r.ctl(*sock_))
-    {}
+    bool prepare(Socket& socket, Buffer buf, int flags, Slot slot) {
+        if(*this) {
+            throw std::system_error { make_error_code(std::errc::operation_in_progress), "read" };
+        }
+        buf_ = buf;
+        flags_ = flags;
+        set_slot(slot);
+        return false;   // async
+    }
+    bool complete(Socket& socket, PollEvents events) {
+        std::error_code ec{};
+        ssize_t size = socket.recv(buf_, flags_, ec);
+        if(size<0 && ec.value()==EWOULDBLOCK) {
+            socket.poll().add(PollEvents::Read);
+            return false; // no more
+        } else {
+            notify(size, ec);   // this will launch handlers they could make not-empty again
+            if(empty()) {
+                socket.poll().del(PollEvents::Read); // no write interest 
+            }
+            return true; // done
+        }
+    }
+    void reset() { 
+        Base::reset();
+        buf_ = {};
+        flags_ = 0;        
+    }
+  protected:
+    Buffer buf_ {};
+    int flags_ {};    
+};
 
-    template<typename ReactorT>
-    explicit BasicSocket(Protocol protocol, ReactorT& r)
-    : sock_(std::move(protocol))
-    , poll_(*sock_, r.ctl(*sock_))
-    {}
+template<typename SocketT>
+class SocketWrite : public CompletionSlot<ssize_t, std::error_code> {
+    using Base=CompletionSlot<ssize_t, std::error_code>;
+  public:
+    using Buffer=ConstBuffer;
+    using Socket=SocketT;
+    using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot;
+
+    bool prepare(Socket& socket, Buffer buf, Slot slot) {
+        if(*this) {
+            throw std::system_error { make_error_code(std::errc::operation_in_progress), "write" };
+        }
+        buf_ = buf;
+        set_slot(slot);
+        return false; // async
+    }
+    bool complete(Socket& socket, PollEvents events) {
+        std::error_code ec{};
+        ssize_t size = socket.write(buf_, ec);
+        if(size<0 && ec.value()==EWOULDBLOCK) {
+            socket.poll().add(PollEvents::Write);
+            return false; // no more
+        } else {
+            notify(size, ec); // this will launch handlers they could make not-empty again
+            if(empty()) {
+                socket.poll().del(PollEvents::Write);
+            }
+            return true; // done
+        }
+    }
+    void reset() { 
+        Base::reset();
+        buf_ = {};
+    }
+  protected:
+    Buffer buf_ {};
+};
+
+template<typename SocketT>
+class SockOpen {
+public:
+    void prepare(SocketT& socket) {
+        socket.set_non_block();
+        if (socket.is_ip_family()) {
+            set_tcp_no_delay(socket.get(), true);
+        }
+    }
+};
+
+template<typename SockT>
+class BasicSocket : public SockT {
+    using Base = SockT;
+    using This = BasicSocket<SockT>;
+public:
+    using typename SockT::Protocol;
+    using typename SockT::Endpoint;
+    using PollHandle = toolbox::PollHandle;
+public:
+    using Base::Base, Base::get;
+    using Base::read, Base::write, Base::recv;
 
     template<typename ReactorT>
     explicit BasicSocket(ReactorT& r)
-    : poll_(*sock_, r.ctl(*sock_))
-    {}
+    : poll_(r.poll(*this))
+    {
+        open_.prepare(*this);
+    }
+
+    template<typename ReactorT>
+    explicit BasicSocket(ReactorT& r, Protocol protocol)
+    : Base(protocol)
+    , poll_(r.poll(*this))
+    {
+        open_.prepare(*this);
+    }
 
     constexpr BasicSocket() noexcept = default;
 
@@ -148,122 +191,68 @@ public:
     void state(SocketState val) { state_ = val; }
     
     template<typename ReactorT>
-    void open(Protocol protocol, ReactorT& r) {
-        sock_ = SockT(protocol);
-        poll_ = PollHandle {*sock_, r.ctl(*sock_)};
-        impl().on_sock_prepare(sock_);
+    void open(ReactorT& r, Protocol protocol) {
+        *static_cast<SockT*>(this) = SockT(protocol);
+        poll_ = r.poll(get());
+        open_.prepare(*this);
     }
-
-    void open() {
-        impl().on_sock_prepare(sock_);
-    }
-
-    void bind(const Endpoint& ep) { sock_.bind(ep); }
-    
-    // nothing by default, for tcp should be overriden
-    void connect(const Endpoint& ep) { }
-
+  
     void close() {
-        if(!sock_.empty()) {
-            poll_.reset();
-            sock_.close();      
-        }  
+        poll_.reset();
+        Base::close();        
     }
 
-    Sock& sock() { return sock_; }
-
-    void read(MutableBuffer buffer, Slot<ssize_t, std::error_code> slot) {
-        //assert(state_==SocketState::Connected);
-        if(!read_.empty()) {
-            throw std::system_error { make_error_code(std::errc::operation_in_progress), "read" };
-        }
-        read_ = {SockOpId::Read, slot, buffer};
-        poll().add(PollEvents::Read);
+    void async_read(MutableBuffer buffer, Slot<ssize_t, std::error_code> slot) {
+        read_.prepare(*this, buffer, 0, slot);
+    }
+    
+    void async_recv(MutableBuffer buffer, int flags, Slot<ssize_t, std::error_code> slot) {
+        read_.prepare(*this, buffer, flags, slot);
     }
 
-    void recv(MutableBuffer buffer, int flags, Slot<ssize_t, std::error_code> slot) {
-        //assert(state_==SocketState::Connected);
-        if(!read_.empty()) {
-            throw std::system_error { make_error_code(std::errc::operation_in_progress), "recv" };
-        }
-        read_ = {SockOpId::Recv, slot, buffer, flags};
-        poll().add(PollEvents::Read);
-    }
-
-    void write(ConstBuffer buffer, Slot<ssize_t, std::error_code> slot) {
-        //assert(state_==SocketState::Connected);
-        if(!write_.empty()) {
-            throw std::system_error { make_error_code(std::errc::operation_in_progress), "write" };
-        }   
-        write_ = {SockOpId::Write, slot, buffer, 0};
-        poll().add(PollEvents::Write);
+    void async_write(ConstBuffer buffer, Slot<ssize_t, std::error_code> slot) {
+        write_.prepare(*this, buffer, slot);
     } 
 
-    void on_sock_prepare(Sock& sock) {
-        sock.set_non_block();
-    }
 protected:
-    DerivedT& impl() { return *static_cast<DerivedT*>(this); }
+    void do_open() {
+        poll().mod(io_slot());
+        Base::set_non_block();
+        sock_open(*this);
+    }
     
-    /// io slot to use
-    IoSlot io_slot() { return util::bind<&DerivedT::on_io_event>(this); }  
+    IoSlot io_slot() { return util::bind<&This::on_io_event>(this); }  
 
-    /// basic io event handler
     void on_io_event(CyclTime now, os::FD fd, PollEvents events) {        
-        bool again;
-        do {
-            again = false;
-            // flush output
-            if(events & PollEvents::Write) {
-                while(!write_.empty()) {
-                    std::error_code ec {};
-                    ssize_t size = sock_.write(write_.buffer(), ec);
-                    if(size<0 && ec.value()==EWOULDBLOCK) {
-                        poll().add(PollEvents::Write);
-                        break;
-                    } else {
-                        write_.complete(size, ec);
-                        again = true;
-                    }
-                }
-            }
-            // then drain input
+        for(std::size_t i=0; i<4; i++) {
+            // read something
             if(events & PollEvents::Read) {
-                while(!read_.empty()) {
-                    ssize_t size;
-                    std::error_code ec{};
-                    switch(read_.id()) {
-                        case SockOpId::Recv:
-                            size = sock_.recv(read_.buffer(), read_.flags(), ec);
-                            break;
-                        default:
-                            size = sock_.read(read_.buffer(), ec);
-                            break;
+                while(read_) {
+                    if(!read_.complete(*this, events)) {
+                        events = events - PollEvents::Read; // read will block
                     }
-                    if(size<0 && ec.value()==EWOULDBLOCK) {
-                        poll().add(PollEvents::Read);
+                }
+            }            
+            // write ready things
+            if(events & PollEvents::Write) {
+                while(write_) {
+                    if(!write_.complete(*this, events)) {
+                        events = events - PollEvents::Write; // write will block
                         break;
-                    } else {
-                        read_.complete(size, ec);
-                        again = true;
                     }
                 }
             }
-        } while(again);
-        if(write_.empty()) {
-            poll().del(PollEvents::Write);
+            if(!(events & (PollEvents::Read+PollEvents::Write)))
+                break; // nothing more to do
         }
-        //if(read_.empty()) {
-        //    poll().del(PollEvents::Read);
-        //}
         poll().commit();
     }
 protected:
     SocketState state_ {SocketState::Disconnected};
-    Sock sock_;
     PollHandle poll_;
-    SockOpBuf<MutableBuffer> read_;
-    SockOpBuf<ConstBuffer> write_;        
+    SocketRead<This> read_;
+    SocketWrite<This> write_;
+    SockOpen<This> open_;
 };
 
 }

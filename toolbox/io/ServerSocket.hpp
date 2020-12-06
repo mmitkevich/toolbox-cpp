@@ -31,95 +31,94 @@
 namespace toolbox {
 inline namespace io {
 
-template<typename SockT, typename PollT, typename ClientSocketT>
-class SockAcceptOp : public BasicSockOp<ClientSocketT&&, std::error_code> {
-    using Base = BasicSockOp<ClientSocketT&&, std::error_code>;
-    public:
-    using Base::Base;
-    using Slot = typename Base::Slot;
-    using Sock = SockT;
-    using Endpoint = typename Sock::Endpoint;
+template<typename SocketT, typename ClientSocketT>
+class SocketAccept : public CompletionSlot<ClientSocketT&&, std::error_code> {
+    using Base = CompletionSlot<std::error_code>;
+  public:
+    using Socket = SocketT;
     using ClientSocket = ClientSocketT;
+    using Endpoint=typename Socket::Endpoint;
+    using typename Base::Slot;
+    using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot, Base::reset;
 
-
-    SockAcceptOp(SockOpId id, Slot slot, Endpoint&& ep)
-    : Base(id, slot)
-    , endpoint_(ep) {}
-    Endpoint& endpoint() { return endpoint_;}
-    
-    void complete(PollT& poll, Sock& serv) {
-        std::error_code ec {};
-        auto sock = serv.accept(endpoint_, ec);
-        sock.set_non_block();
-        if (sock.is_ip_family()) {
-            set_tcp_no_delay(sock.get(), true);
+    bool prepare(Socket& socket, const Endpoint& ep, Slot slot) {
+        if(*this) {
+            throw std::system_error { make_error_code(std::errc::operation_in_progress), "accept" };
         }
-        ClientSocket client {poll, std::move(sock) };
-        complete(std::move(client), ec);
+        endpoint_ = ep;
+        set_slot(slot);
+        socket.poll().add(PollEvents::Read);
+        return true;
     }
-    protected:
+    bool complete(Socket& socket, PollEvents events) {
+        if(events & PollEvents::Read) {
+            std::error_code ec {};
+            auto sock = socket.accept(endpoint_, ec);
+            socket.poll().del(PollEvents::Read);
+            ClientSocket client {socket};
+            notify(std::move(client), ec);
+            return true;
+        }
+        return false;
+    }
+protected:
     Endpoint endpoint_;
 };
 
 /// adds listen and accept
-template<typename SockT, typename PollT, typename ClientSocketT, typename DerivedT>
-class BasicServerSocket : public BasicSocket<SockT, PollT, DerivedT> {
-    using This = BasicServerSocket<SockT, PollT, ClientSocketT, DerivedT>;
-    using Base = BasicSocket<SockT, PollT,  DerivedT>;
+template<typename SockT, typename SockClntT>
+class BasicServerSocket : public BasicSocket<SockT> {
+    using This = BasicServerSocket<SockT, SockClntT>;
+    using Base = BasicSocket<SockT>;
 public:
-    using PollHandle = PollT;
-    using Sock = SockT;
-    using ClientSocket = ClientSocketT;
-    using Protocol = typename Sock::Protocol;
-    using Endpoint = typename Sock::Endpoint;
-    using AcceptOp = SockAcceptOp<SockT, PollT, ClientSocket>;
-    using AcceptSlot = typename AcceptOp::Slot;
+    using typename Base::PollHandle;
+    using typename Base::Protocol;
+    using typename Base::Endpoint;
+    using ClientSocket = BasicStreamSocket<SockClntT>;
+    using AcceptOp = SocketAccept<This, ClientSocket>;
 public:
     using Base::Base;
     using Base::poll, Base::sock, Base::state;
     using Base::read, Base::write, Base::recv;
     
+    PollHandle poll(SockClntT& sock) {
+        PollHandle p = poll();
+        p.fd(sock.get());
+        return p;
+    }
+
     void listen(int backlog=0) { 
         state(SocketState::Listening);
         sock().listen(backlog);
     }
-    void accept(AcceptSlot slot) {
-        assert(state()==SocketState::Listening);
-        if(!accept_.empty()) {
-            throw std::system_error{make_error_code(std::errc::operation_in_progress), "accept"};
-        }
-        accept_ = {SockOpId::Accept, slot};
-        poll().add(PollEvents::Read,  util::bind<&This::on_io_event>(this));
+    void accept(Slot<ClientSocket&&, std::error_code> slot) {
+        accept_.prepare(*this, slot);
     }
 protected:
-    void on_sock_open(Sock& sock) {
-        Base::on_sock_open(sock);
-        sock.set_reuse_addr(true);
-        if (sock.is_ip_family()) {
-            sock.set_tcp_no_delay(true);
-        }
-    }
     void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
-        //assert(state_==SocketState::Listening);
-        if(!accept_.empty()) {
+        if(accept_) {
             accept_.complete(poll(), sock());
+            poll().commit();
         }
     }  
 protected:
     AcceptOp accept_;
 };
 
-class ServerSocket : public BasicServerSocket<StreamSockServ, PollHandle, StreamSocket, ServerSocket> {
-    using Base = BasicServerSocket<StreamSockServ, PollHandle, StreamSocket, ServerSocket>;
-public:
-    using Sock = typename Base::Sock;
-    using PollHandle = typename Base::PollHandle;
-public:
-    using Base::Base;
-    using Base::poll, Base::sock;
-    using Base::read, Base::write, Base::recv;
-    using Base::accept, Base::listen, Base::bind;
+template<typename SockT, typename SockClntT>
+class SockOpen<BasicServerSocket<SockT, SockClntT>> {
+    using Socket = BasicServerSocket<SockT, SockClntT>;
+  public:
+    void prepare(Socket& socket) {
+        socket.set_non_block();
+        if (socket.is_ip_family()) {
+            set_tcp_no_delay(socket.get(), true);
+        }
+        socket.set_reuse_addr(true);
+    }
 };
+
+using ServerSocket = BasicServerSocket<StreamSockServ, StreamSockClnt>;
 
 } // namespace net
 } // namespace toolbox
