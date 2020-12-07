@@ -5,6 +5,7 @@
 #include "toolbox/sys/Error.hpp"
 #include "toolbox/io/Buffer.hpp"
 #include "toolbox/io/Reactor.hpp"
+#include "toolbox/net/DgramSock.hpp"
 
 namespace toolbox {
 inline namespace io {
@@ -254,6 +255,8 @@ protected:
     SocketWrite<This> write_;
     SockOpen<This> open_;
 };
+
+using DgramSocket = BasicSocket<DgramSock>;
 
 }
 }

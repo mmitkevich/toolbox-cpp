@@ -830,6 +830,25 @@ struct Sock : FileHandle {
     int family_{};
 };
 
+struct SocketTraits {
+    // some traits
+    template<typename SockT>
+    constexpr static bool has_sock_connect() { return false; }
+
+    template<typename SockT>
+    constexpr static auto has_sock_connect() -> decltype(
+        std::declval<SockT>().connect(std::declval<typename SockT::Endpoint>()), bool())
+        { return true; }
+
+    template<typename SockT>
+    constexpr static bool has_sock_accept() { return false; }
+
+    template<typename SockT>
+    constexpr static auto has_sock_accept() -> decltype(
+        std::declval<SockT>().accept(std::declval<typename SockT::Endpoint>()), bool())
+        { return true; }
+};
+
 } // namespace net
 } // namespace toolbox
 

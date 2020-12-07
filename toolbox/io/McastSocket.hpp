@@ -31,43 +31,33 @@ namespace toolbox {
 inline namespace io {
 
 
-template<typename SockT, typename PollT, typename DerivedT>
-class BasicMcastSocket : public BasicSocket<SockT, PollT, DerivedT> {
-    using This = BasicMcastSocket<SockT, PollT,  DerivedT>;
-    using Base = BasicSocket<SockT, PollT, DerivedT>;
+template<typename SockT>
+class BasicMcastSocket : public BasicSocket<SockT> {
+    using This = BasicMcastSocket<SockT>;
+    using Base = BasicSocket<SockT>;
   public:
     using typename Base::Sock, typename Base::PollHandle;
     using typename Base::Protocol, typename Base::Endpoint;
   public:
     using Base::Base;
-    using Base::sock, Base::poll;
+    using Base::poll;
     using Base::open, Base::bind;
     using Base::read, Base::write, Base::recv; 
 
+    void connect(const Endpoint& ep) {
+      
+    }
     template<typename AddrT, typename IfaceT>
     void join_group(const AddrT& addr, IfaceT iface) {
-      return sock().join_group(addr, std::forward<IfaceT>(iface));
+      return Base::join_group(addr, std::forward<IfaceT>(iface));
     }
     template<typename AddrT, typename IfaceT>
     void leave_group(const AddrT& addr, IfaceT iface) {
-      return sock().leave_group(addr, std::forward<IfaceT>(iface));
+      return Base::leave_group(addr, std::forward<IfaceT>(iface));
     }
 };
 
-class McastSocket: public BasicMcastSocket<McastSock, PollHandle, McastSocket>
-{
-    using Base = BasicMcastSocket<McastSock, PollHandle, McastSocket>;
-public:
-    using Sock = typename Base::Sock;
-    using Protocol = typename Sock::Protocol;
-    using Endpoint = typename Sock::Endpoint;
-public:
-    using Base::Base;
-    using Base::sock, Base::poll;
-    using Base::open, Base::bind;
-    using Base::read, Base::write, Base::recv; 
-    using Base::join_group, Base::leave_group;
-};
+using McastSocket = BasicMcastSocket<McastSock>;
 
 } // namespace net
 } // namespace toolbox

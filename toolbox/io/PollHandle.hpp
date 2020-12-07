@@ -189,7 +189,7 @@ public:
             pending_commit_ = true;
         }
     }
-    [[noinline]]
+
     void commit() noexcept {
         // possible optimize more with constexpr if (epoll.is_et())....
         if(pending_commit_) {
