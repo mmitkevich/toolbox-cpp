@@ -5,6 +5,7 @@
 #include "toolbox/sys/Error.hpp"
 #include "toolbox/io/Buffer.hpp"
 #include "toolbox/io/Reactor.hpp"
+#include "toolbox/net/Sock.hpp"
 #include "toolbox/net/DgramSock.hpp"
 
 namespace toolbox {
