@@ -50,11 +50,14 @@ int main(){ This app; return 0; }
 ```
 ## Protocols
 - Exchanges use UDP multicast with periodical snapshot as primary transport for market data. 
+
 - Using unreliable UDP is due to the fact that strategies could often tolerate packet loss/reordering 
   - one could rebuild orderbook even if data is lost ["natural orderbook refresh"](https://www.cmegroup.com/confluence/display/EPICSANDBOX/MDP+3.0+-+Market+by+Price+-+Book+Recovery+Methods+for+Concurrent+Processing#MDP3.0MarketbyPriceBookRecoveryMethodsforConcurrentProcessing-BookRecovery-NaturalRefresh)
+
 - If in-order reliable communication is absolutely required, one could use 
    - TCP (since it is optimized for decades, e.g. TcpDirect), 
    - [Aeron](https://github.com/real-logic/aeron/wiki/Transport-Protocol-Specification) - reliable UDP - uses NACKs instead os TCP ACKs.
+
 - It is possible to design simple trading protocols tolerant to unreliable transport: 
   - packets reordering - via using sender-generated packet sequences - so receiver skips stale packets - and we don't care about PREVIOUS position
   - packet loss - receiver sends hearbeats(periodical ACKs) to sender with client's high seqeunce  - for sender to detect packet loss and resend 
@@ -62,8 +65,9 @@ int main(){ This app; return 0; }
 
 - Last resort is TCP recovery - if we want history of messages in correct order - but it is not low latency - and required only for historical data collection purposes.
 
-In general, we should pass packets immediately to strategy logic. Tcp could wait too long while lost packets are resent
-Also: small packets are better - faster delivery, no fragmentation (should consider MTU size)
+- In general, we should pass packets immediately to strategy logic. Tcp could wait too long while lost packets are resent
+
+- Also: small packets are better - faster delivery, no fragmentation (should consider MTU size)
 
 ## Architecture
 
@@ -79,6 +83,7 @@ Also: small packets are better - faster delivery, no fragmentation (should consi
 - Udp Multicast  ..... McastSock
 - Tls/Ssl.       ..... TlsSockClnt<StreamSockClnt>, TlsSockServ<StreamSockServ> -- use https://github.com/h2o/picotls or OpenSSL
 - Websocket      ..... WebSockClnt<StreamSockClnt>, WebSockServ<StreamSockServ> -- https://github.com/tatsuhiro-t/wslay or custom impl
+- Ipc SpSc/MpSc/MpMc ..... MagicRingBuffer, MpMcQueue
 
 ### Poll platform-specific layer
 #### standard linux:
@@ -98,24 +103,18 @@ Also: small packets are better - faster delivery, no fragmentation (should consi
 platform/hw API                 Sync/HW-specific layer                   Async layer.           Sync+Async API + zero-copy API
 -------------------             ----------------------                   -------------          --------------------------------------
 os::recv(buf), os::write(buf)   (Udp) McastSock, DgramSock -+                                +- socket.async_connect(endpoint, [](ec){})
-                                (Tcp) StreamSock (posix)   -+-----------> Socket<Sock>    ---+- socket.async_read(buf, [](size, ec){})
-mrb.zc_recv(buf)                (Ipc) MagicRingBuf         -+                                +- socket.async_write(buf, [](size, ec){})
-ef_vi_receive_post              (EfVi) EfViSock            -+                                +- socket.async_zc_recv([](buf, ec) {})
-zc_recv(zock)                   (TcpD) TcpDirectSock       -+
-```
-
-
- Sync layer API                          Async layer API
----------------------                    -------------------- 
-os::recv/                        socket.async_read(buf, [](size, ec) {})
-os::write                        socket.async_write(buf, [](size, ec){})
-                                         
-                                                                 | on_io_event(fd, Read|Write)
-                poll API                 Pollers                 |
-               -------                   ---------               |
-Generic HW  -- os::epoll --------------- Epoll -------------+    |
-Solarfale   -- sf::ef_eventq_poll ------ EfViPoll  ---------+    |
-X2522       -- sf::zf_reactor_perform -- TcpDirectPoll -----+-- Reactor --
+                                (Tcp) StreamSock (posix)   -+-----------> Socket<Sock> ------+- socket.async_read(buf, [](size, ec){})
+mrb::zc_recv(buf)               (Ipc) MagicRingBuf         -+                    ^           +- socket.async_write(buf, [](size, ec){})
+sf::ef_vi_receive_post          (KByPass) EfViSock         -+                    |           +- socket.async_zc_recv([](buf, ec) {})
+sf::zc_recv(zock)               (KByPass) TcpDirectSock    -+                    |
+                                                                                 |
+                                                                         on_io_event(fd, Read|Write)
+                                                                                 | 
+                poll API                 Pollers                                 |
+               -------                   ---------                               |
+Generic HW  -- os::epoll --------------- Epoll -------------+                    ^
+Solarfale   -- sf::ef_eventq_poll ------ EfViPoll  ---------+                    |
+X2522       -- sf::zf_reactor_perform -- TcpDirectPoll -----+---->----- Reactor -+
 Intel       --- DPDK ------------------- /*TBD*/ -----------+     
 Mellanox    ---- VMA ------------------- /*TBD*/------------+
 ipc mmap    ---- SpSc/MpSc      -------- QPoll -------------+
