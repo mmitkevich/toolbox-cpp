@@ -253,13 +253,58 @@ class TOOLBOX_API Epoll {
     /// modifies subscription
     bool ctl(PollHandle& handle);
 
-    int dispatch(CyclTime now);
+    int dispatch(CyclTime now)
+    {
+        int work{0};
+        for (std::size_t i = 0; i < ready_; ++i) {
+
+            auto& ev = events_[i];
+            const FD fd = Epoll::fd(ev);
+            if (fd == notify_.fd()) {
+                notify_.read();
+                continue;
+            }
+            const PollFD& ref = data_[fd];
+            auto s = ref.slot();
+            if (!s) {
+                // Ignore timerfd.
+                continue;
+            }
+
+            const int sid = Epoll::sid(ev);
+            // Skip this socket if it was modified after the call to wait().
+            if (ref.sid() > sid) {
+                continue;
+            }
+            // Apply the interest events to filter-out any events that the user may have removed from
+            // the events since the call to wait() was made. This would typically happen via a reentrant
+            // call into the reactor from an event-handler. N.B. EpollErr and EpollHup are always
+            // reported if they occur, regardless of whether they are specified in events.
+            const uint32_t events = ev.events & (to_epoll_events(ref.events()) | EpollErr | EpollHup);
+            if (!events) {
+                continue;
+            }
+
+            try {
+                assert(s!=nullptr);
+                auto evs = from_epoll_events(events);
+                TOOLBOX_DUMP<<"epoll_ready fd="<<fd<<" events="<<evs;
+                s(now, fd, evs);
+            } catch (const std::exception& e) {
+                TOOLBOX_ERROR << "error handling io event: " << e.what();
+            }
+            ++work;
+        }
+        ready_ = 0;
+        return work;
+    }
     
     void wakeup() noexcept {
         // Best effort.
         std::error_code ec;
         notify_.write(1, ec);
     }
+    bool constexpr is_et_mode() const { return epoll_mode_ == EpollEt; }
 private:
     void add(FD fd, int sid, PollEvents events)
     {
@@ -321,7 +366,7 @@ private:
     std::array<Event,MaxEvents> events_;
     std::size_t ready_{};
     //unsigned epoll_mode_ {0};
-    unsigned epoll_mode_ {EpollEt};
+    static constexpr unsigned epoll_mode_ {EpollEt};
 };
 
 } // namespace io

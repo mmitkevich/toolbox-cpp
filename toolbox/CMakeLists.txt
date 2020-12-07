@@ -240,7 +240,7 @@ set(test_SOURCES
   net/RateLimit.ut.cpp
   net/Resolver.ut.cpp
   net/Runner.ut.cpp
-  net/Socket.ut.cpp
+  net/Sock.ut.cpp
   net/Pcap.ut.cpp
   sys/Date.ut.cpp
   sys/Log.ut.cpp

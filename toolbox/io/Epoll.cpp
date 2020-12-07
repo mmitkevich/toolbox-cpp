@@ -27,8 +27,8 @@ bool Epoll::ctl(PollHandle& handle) {
     auto fd = handle.fd();
     auto ix = static_cast<std::size_t>(fd);
     auto events = handle.events();
-    if(epoll_mode_&EpollEt) {
-        events = events + PollEvents::Read + PollEvents::Write;
+    if constexpr (epoll_mode_==EpollEt) {
+        events = events + PollEvents::Read + PollEvents::Write + PollEvents::ET;
     }
     if(handle.empty()) {
         if(ix<data_.size()) {
@@ -43,8 +43,7 @@ bool Epoll::ctl(PollHandle& handle) {
         }
         auto& ref = data_[ix];
         if(ref.empty()) {
-            handle.next_sid();                          // initial subscribe            
-            add(fd, handle.sid(), events);     // throws on error
+            add(fd, handle.next_sid(), events);     // initial subscribe            
             ref = handle;                               // commit
         } else if(ref.sid()!=handle.sid()) { 
             return false;
@@ -59,48 +58,4 @@ bool Epoll::ctl(PollHandle& handle) {
     return true;
 }
 
-int Epoll::dispatch(CyclTime now)
-{
-    int work{0};
-    for (std::size_t i = 0; i < ready_; ++i) {
 
-        auto& ev = events_[i];
-        const FD fd = Epoll::fd(ev);
-        if (fd == notify_.fd()) {
-            notify_.read();
-            continue;
-        }
-        const PollFD& ref = data_[fd];
-        auto s = ref.slot();
-        if (!s) {
-            // Ignore timerfd.
-            continue;
-        }
-
-        const int sid = Epoll::sid(ev);
-        // Skip this socket if it was modified after the call to wait().
-        if (ref.sid() > sid) {
-            continue;
-        }
-        // Apply the interest events to filter-out any events that the user may have removed from
-        // the events since the call to wait() was made. This would typically happen via a reentrant
-        // call into the reactor from an event-handler. N.B. EpollErr and EpollHup are always
-        // reported if they occur, regardless of whether they are specified in events.
-        const uint32_t events = ev.events & (to_epoll_events(ref.events()) | EpollErr | EpollHup);
-        if (!events) {
-            continue;
-        }
-
-        try {
-            assert(s!=nullptr);
-            auto evs = from_epoll_events(events);
-            TOOLBOX_DUMP<<"epoll_ready fd="<<fd<<" events="<<evs;
-            s.invoke(now, fd, evs);
-        } catch (const std::exception& e) {
-            TOOLBOX_ERROR << "error handling io event: " << e.what();
-        }
-        ++work;
-    }
-    ready_ = 0;
-    return work;
-}

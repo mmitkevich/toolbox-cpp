@@ -191,6 +191,7 @@ public:
     }
     [[noinline]]
     void commit() noexcept {
+        // possible optimize more with constexpr if (epoll.is_et())....
         if(pending_commit_) {
             //TOOLBOX_DEBUG<<"poll_commit "<<events_;
             ctl_(*this);

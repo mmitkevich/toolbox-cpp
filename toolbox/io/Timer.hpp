@@ -194,14 +194,55 @@ class TOOLBOX_API TimerQueue {
     }
     // clang-format on
 
-    int dispatch(CyclTime now);
+    int dispatch(CyclTime now)
+    {
+        int work{};
+        while (!heap_.empty()) {
+
+            // If not pending, then must have been cancelled.
+            if (!heap_.front().pending()) {
+                pop();
+                --cancelled_;
+                assert(cancelled_ >= 0);
+            } else if (heap_.front().expiry() <= now.mono_time()) {
+                expire(now);
+                ++work;
+            } else {
+                break;
+            }
+        }
+        gc();
+        return work;
+    }
 
   private:
     Timer alloc(MonoTime expiry, Duration interval, TimerSlot slot);
     void cancel() noexcept;
     void expire(CyclTime now);
-    void gc() noexcept;
-    Timer pop() noexcept;
+    void gc() noexcept
+    {
+        // Garbage collect if more than half of the timers have been cancelled.
+        if (cancelled_ > static_cast<int>(heap_.size() >> 1)) {
+            const auto it
+                = remove_if(heap_.begin(), heap_.end(), [](const auto& tmr) { return !tmr.pending(); });
+            heap_.erase(it, heap_.end());
+            make_heap(heap_.begin(), heap_.end(), is_after);
+            cancelled_ = 0;
+        }
+    }
+
+    Timer pop() noexcept
+    {
+        auto tmr = heap_.front();
+        pop_heap(heap_.begin(), heap_.end(), is_after);
+        heap_.pop_back();
+        return tmr;
+    }
+
+    static bool is_after(const Timer& lhs, const Timer& rhs)
+    {
+        return lhs.expiry() > rhs.expiry();
+    }
 
     TimerPool& pool_;
     long max_id_{};

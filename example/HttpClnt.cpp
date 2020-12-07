@@ -75,7 +75,7 @@ class HttpClnt2 {
         
         TOOLBOX_INFO << count_<<" recv: " << size <<" ec:"<<ec<<" " << std::string_view {(const char*)input_.buffer().data(), input_.buffer().size()};
         input_.consume(size);
-        if(count_<100) {
+        if(count_<10000) {
             count_++;            
             send(Request);
         } else if(size==0) { // EOF
