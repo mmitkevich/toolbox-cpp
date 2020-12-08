@@ -71,6 +71,8 @@ class SocketRead : public CompletionSlot<ssize_t, std::error_code> {
         buf_ = buf;
         flags_ = flags;
         set_slot(slot);
+        socket.poll().add(PollEvents::Read);
+        socket.poll().commit();
         return false;   // async
     }
     bool complete(Socket& socket, PollEvents events) {
@@ -111,6 +113,7 @@ class SocketWrite : public CompletionSlot<ssize_t, std::error_code> {
         }
         buf_ = buf;
         set_slot(slot);
+        socket.poll().add(PollEvents::Write);
         return false; // async
     }
     bool complete(Socket& socket, PollEvents events) {
@@ -140,9 +143,6 @@ class SockOpen {
 public:
     void prepare(SocketT& socket) {
         socket.set_non_block();
-        if (socket.is_ip_family()) {
-            set_tcp_no_delay(socket.get(), true);
-        }
     }
 };
 
@@ -160,7 +160,7 @@ public:
 
     template<typename ReactorT>
     explicit BasicSocket(ReactorT& r)
-    : poll_(r.poll(*this))
+    : poll_(r.poll(get()))
     {
         open_.prepare(*this);
     }
@@ -168,9 +168,10 @@ public:
     template<typename ReactorT>
     explicit BasicSocket(ReactorT& r, Protocol protocol)
     : Base(protocol)
-    , poll_(r.poll(*this))
+    , poll_(r.poll(get()))
     {
         open_.prepare(*this);
+        io_slot(bind<&This::on_io_event>(this));
     }
 
     constexpr BasicSocket() noexcept = default;
@@ -195,8 +196,9 @@ public:
     template<typename ReactorT>
     void open(ReactorT& r, Protocol protocol) {
         *static_cast<SockT*>(this) = SockT(protocol);
-        poll_ = r.poll(get());
+        poll_ = r.poll(get());        
         open_.prepare(*this);
+        io_slot(bind<&This::on_io_event>(this));
     }
   
     void close() {
@@ -216,22 +218,23 @@ public:
         write_.prepare(*this, buffer, slot);
     } 
 
-protected:
-    void do_open() {
-        poll().mod(io_slot());
-        Base::set_non_block();
-        sock_open(*this);
+    IoSlot io_slot() { return io_slot_; }  
+    void io_slot(IoSlot slot) {
+        if(io_slot_ != slot) {
+            io_slot_ = slot;
+            poll().mod(slot);        
+        }
     }
-    
-    IoSlot io_slot() { return util::bind<&This::on_io_event>(this); }  
-
+protected:    
     void on_io_event(CyclTime now, os::FD fd, PollEvents events) {        
-        for(std::size_t i=0; i<4; i++) {
+        auto old_batching = poll().batching(true); // disable commits of poll flags while in the cycle
+        for(std::size_t i=0; i<64; i++) {
             // read something
             if(events & PollEvents::Read) {
                 while(read_) {
                     if(!read_.complete(*this, events)) {
                         events = events - PollEvents::Read; // read will block
+                        break;
                     }
                 }
             }            
@@ -247,9 +250,11 @@ protected:
             if(!(events & (PollEvents::Read+PollEvents::Write)))
                 break; // nothing more to do
         }
-        poll().commit();
+        poll().batching(old_batching);
+        poll().commit(true);    // always commit in the end of processing
     }
 protected:
+    IoSlot io_slot_ {};
     SocketState state_ {SocketState::Disconnected};
     PollHandle poll_;
     SocketRead<This> read_;

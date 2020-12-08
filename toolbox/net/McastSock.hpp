@@ -254,11 +254,11 @@ struct McastSock : IoSock {
     void get_sock_name(Endpoint& ep) { os::getsockname(get(), ep); }
     void bind(const Endpoint& ep, std::error_code& ec) noexcept { os::bind(get(), ep, ec); }
     void bind(const Endpoint& ep) { os::bind(get(), ep); }
-    void connect(const Endpoint& ep, std::error_code& ec) noexcept
+    /*void connect(const Endpoint& ep, std::error_code& ec) noexcept
     {
         return os::connect(get(), ep, ec);
     }
-    void connect(const Endpoint& ep) { return os::connect(get(), ep); }
+    void connect(const Endpoint& ep) { return os::connect(get(), ep); }*/
 
     ssize_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep,
                      std::error_code& ec) noexcept
@@ -316,44 +316,35 @@ struct McastSock : IoSock {
         return toolbox::join_group(get(), addr, ifname);
     }
 
-    void leave_group(const IpAddr& addr, unsigned ifindex, std::error_code& ec) noexcept
-    {
+    void leave_group(const IpAddr& addr, unsigned ifindex, std::error_code& ec) noexcept {
         return toolbox::leave_group(get(), addr, ifindex, ec);
     }
-    void leave_group(const IpAddr& addr, unsigned ifindex)
-    {
+    void leave_group(const IpAddr& addr, unsigned ifindex) {
         return toolbox::leave_group(get(), addr, ifindex);
     }
 
-    void leave_group(const IpAddr& addr, const char* ifname, std::error_code& ec) noexcept
-    {
+    void leave_group(const IpAddr& addr, const char* ifname, std::error_code& ec) noexcept {
         return toolbox::leave_group(get(), addr, ifname, ec);
     }
-    void leave_group(const IpAddr& addr, const char* ifname)
-    {
+    void leave_group(const IpAddr& addr, const char* ifname) {
         return toolbox::leave_group(get(), addr, ifname);
     }
 
-    void set_ip_mcast_if(const char* ifname, std::error_code& ec) noexcept
-    {
+    void set_ip_mcast_if(const char* ifname, std::error_code& ec) noexcept {
         return toolbox::set_ip_mcast_if(get(), family(), ifname, ec);
     }
-    void set_ip_mcast_if(const char* ifname)
-    {
+    void set_ip_mcast_if(const char* ifname) {
         return toolbox::set_ip_mcast_if(get(), family(), ifname);
     }
 
-    void set_ip_mcast_loop(bool enabled, std::error_code& ec) noexcept
-    {
+    void set_ip_mcast_loop(bool enabled, std::error_code& ec) noexcept {
         return toolbox::set_ip_mcast_loop(get(), family(), enabled, ec);
     }
-    void set_ip_mcast_loop(bool enabled)
-    {
+    void set_ip_mcast_loop(bool enabled) {
         return toolbox::set_ip_mcast_loop(get(), family(), enabled);
     }
 
-    void set_ip_mcast_ttl(int ttl, std::error_code& ec) noexcept
-    {
+    void set_ip_mcast_ttl(int ttl, std::error_code& ec) noexcept {
         return toolbox::set_ip_mcast_ttl(get(), family(), ttl, ec);
     }
     void set_ip_mcast_ttl(int ttl) { return toolbox::set_ip_mcast_ttl(get(), family(), ttl); }

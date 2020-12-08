@@ -31,7 +31,7 @@ bool Epoll::ctl(PollHandle& handle) {
         events = events + PollEvents::Read + PollEvents::Write + PollEvents::ET;
     }
     if(handle.empty()) {
-        if(ix<data_.size()) {
+        if(ix<data_.size() && !data_[ix].empty()) {
             del(fd);
             data_[ix].reset();
         } else {
@@ -43,8 +43,12 @@ bool Epoll::ctl(PollHandle& handle) {
         }
         auto& ref = data_[ix];
         if(ref.empty()) {
-            add(fd, handle.next_sid(), events);     // initial subscribe            
-            ref = handle;                               // commit
+            if(events) {
+                auto sid = handle.next_sid();
+                ref = handle;
+                ref.events(events);
+                add(fd, sid, events);     // initial subscribe            
+            }
         } else if(ref.sid()!=handle.sid()) { 
             return false;
         } else {

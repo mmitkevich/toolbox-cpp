@@ -143,7 +143,7 @@ class Log {
 
 #if TOOLBOX_BUILD_DEBUG
 #  define TOOLBOX_DEBUG TOOLBOX_LOG(toolbox::Log::Debug)
-#define TOOLBOX_DUMP TOOLBOX_LOG(toolbox::Log::Dump)
+#  define TOOLBOX_DUMP TOOLBOX_LOG(toolbox::Log::Dump)
 #else
 #  define TOOLBOX_DEBUG false && toolbox::Log{toolbox::Log::Debug}
 #  define TOOLBOX_DUMP false && toolbox::Log{toolbox::Log::Dump}

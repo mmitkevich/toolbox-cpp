@@ -17,6 +17,7 @@
 #ifndef TOOLBOX_NET_SOCKET_HPP
 #define TOOLBOX_NET_SOCKET_HPP
 
+#include "toolbox/net/IpAddr.hpp"
 #include <sstream>
 #include <toolbox/net/Error.hpp>
 
@@ -30,6 +31,7 @@
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+
 
 namespace toolbox {
 inline namespace net {
@@ -99,32 +101,6 @@ template <typename ProtocolT>
 inline AddrInfoPtr getaddrinfo(const char* node, const char* service, ProtocolT protocol)
 {
     return getaddrinfo(node, service, protocol.family(), protocol.type(), protocol.protocol());
-}
-
-/// Returns the index of the network interface corresponding to the name ifname.
-inline unsigned if_nametoindex(const char* ifname, std::error_code& ec) noexcept
-{
-    unsigned ifindex{0};
-    if (ifname) {
-        if (!(ifindex = ::if_nametoindex(ifname))) {
-            ec = make_sys_error(errno);
-        }
-    }
-    return ifindex;
-}
-
-/// Returns the index of the network interface corresponding to the name ifname.
-inline unsigned if_nametoindex(const char* ifname)
-{
-    unsigned ifindex{0};
-    if (ifname) {
-        if (!(ifindex = ::if_nametoindex(ifname))) {
-            std::stringstream ss;
-            ss << "if_nametoindex" << ifname;
-            throw std::system_error{make_sys_error(errno), ss.str()};
-        }
-    }
-    return ifindex;
 }
 
 /// Create an endpoint for communication.

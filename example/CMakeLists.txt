@@ -32,3 +32,6 @@ target_link_libraries(tb-http-serv ${tb_core_LIBRARY})
 
 add_executable(tb-http-clnt HttpClnt.cpp)
 target_link_libraries(tb-http-clnt ${tb_core_LIBRARY})
+
+add_executable(tb-aeron-serv AeronServ.cpp)
+target_link_libraries(tb-aeron-serv ${tb_core_LIBRARY} ${AERON_LIBRARY})

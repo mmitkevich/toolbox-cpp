@@ -16,7 +16,9 @@
 
 #pragma once
 
+#include "toolbox/net/Sock.hpp"
 #include <sstream>
+#include <stdexcept>
 #include <toolbox/io/Handle.hpp>
 #include <toolbox/io/TimerFd.hpp>
 #include <toolbox/sys/Error.hpp>
@@ -212,6 +214,7 @@ class TOOLBOX_API Epoll {
         std::swap(data_, rhs.data_);
     }
 
+    /// blocks forever
     /// Returns the number of file descriptors that are ready.
     int wait(std::error_code& ec) noexcept
     {
@@ -225,7 +228,7 @@ class TOOLBOX_API Epoll {
             }
             timeout_ = timeout;
         }
-        TOOLBOX_DUMP<<"epoll_wait timeout=-1";
+        //TOOLBOX_DUMP<<"epoll_wait timeout=-1";
         ready_ =  os::epoll_wait(*epfd_, events_.data(), (int)events_.size(), -1, ec);
         return ready_;
     }
@@ -244,7 +247,7 @@ class TOOLBOX_API Epoll {
             }
             timeout_ = timeout;
         }
-        TOOLBOX_DUMP<<"epoll_wait timeout="<<timeout;
+        //TOOLBOX_DUMP<<"epoll_wait timeout="<<timeout;
         // Do not block if timer is zero.
         ready_ =  os::epoll_wait(*epfd_, events_.data(), (int)events_.size(), is_zero(timeout) ? 0 : -1, ec);
         return ready_;
@@ -252,6 +255,10 @@ class TOOLBOX_API Epoll {
 
     /// modifies subscription
     bool ctl(PollHandle& handle);
+
+    int socket() {
+        throw std::runtime_error("not implemented");
+    }
 
     int dispatch(CyclTime now)
     {
@@ -288,7 +295,7 @@ class TOOLBOX_API Epoll {
             try {
                 assert(s!=nullptr);
                 auto evs = from_epoll_events(events);
-                TOOLBOX_DUMP<<"epoll_ready fd="<<fd<<" events="<<evs;
+                //TOOLBOX_DUMP<<"epoll_ready fd="<<fd<<" events="<<evs;
                 s(now, fd, evs);
             } catch (const std::exception& e) {
                 TOOLBOX_ERROR << "error handling io event: " << e.what();
@@ -365,8 +372,8 @@ private:
     EventFd notify_{0, EFD_NONBLOCK};
     std::array<Event,MaxEvents> events_;
     std::size_t ready_{};
-    //unsigned epoll_mode_ {0};
-    static constexpr unsigned epoll_mode_ {EpollEt};
+    static constexpr unsigned  epoll_mode_ {0};
+    //static constexpr unsigned epoll_mode_ {EpollEt};
 };
 
 } // namespace io

@@ -49,18 +49,19 @@ class PollFD {
 public:
     using FD = os::FD;
     using SID = std::int32_t;
+
     struct FDS {
         os::FD fd;     // linux file handle
         std::int32_t sid;
     };
 
     explicit PollFD(FD fd) {
-        data_.fds.fd = fd;
-        data_.fds.sid = 0;
+        fd_ = fd;
+        sid_ = 0;
     }
 
     explicit PollFD(void* ptr) {
-        data_.ptr = ptr;
+        ptr_ = ptr;
     }
 
     explicit constexpr PollFD(std::nullptr_t=nullptr) noexcept {};
@@ -78,25 +79,30 @@ public:
     }
 
     void swap(PollFD &rhs) {
-        std::swap(data_, rhs.data_);
+        std::swap(fd_, rhs.fd_);
+        std::swap(sid_, rhs.sid_);
+        std::swap(ptr_, rhs.ptr_);
         std::swap(events_, rhs.events_);
         std::swap(slot_, rhs.slot_);
     }
 
     void reset() {
-        data_.fds.fd = -1;
-        data_.fds.sid = 0;
+        fd_ = -1;
+        sid_ = 0;
+        ptr_ = nullptr;
         events_ = PollEvents::None;
         slot_.reset();
     }
 
-    os::FD fd() const noexcept { return data_.fds.fd; }
-    void fd(int fd) noexcept { data_.fds.fd = fd; }
+    os::FD fd() const noexcept { return fd_; }
+    void fd(int fd) noexcept { fd_ = fd; }
 
-    int sid() const noexcept { return data_.fds.sid; }
-    int next_sid() noexcept { return ++data_.fds.sid;}
+    int sid() const noexcept { return sid_; }
+    void sid(int sid) noexcept { sid_ = sid; }
+
+    int next_sid() noexcept { return ++sid_;}
     
-    void* ptr() const noexcept { return data_.ptr; }
+    void* ptr() const noexcept { return ptr_; }
 
     bool empty() const noexcept { return slot_.empty(); }
     explicit operator bool() const noexcept { return !empty(); }
@@ -107,10 +113,9 @@ public:
     IoSlot slot() const noexcept { return slot_; }
     void slot(IoSlot slot) noexcept { slot_ = slot; }
 protected:
-    union Data {
-        FDS fds;
-        void *ptr;  // arbitrary object
-    } data_{};
+    FD fd_{};
+    int sid_{};
+    void *ptr_{};  // arbitrary object
     PollEvents events_ {PollEvents::None};
     IoSlot slot_ {};
 };
@@ -123,6 +128,10 @@ using PollSlot = Slot<PollHandle&>;
 class PollHandle : public PollFD {
 public:
     using Base = PollFD;
+    enum PollFlags: std::int32_t {
+        BatchCtl   = 1,
+        PendingCtl = 2
+    };
 
     using Base::Base;
     explicit constexpr PollHandle(std::nullptr_t = nullptr) noexcept {}
@@ -175,8 +184,7 @@ public:
     void del(PollEvents events) noexcept {
         if(events_ & events) {
             events_ = events_ - events;
-            //commit();
-            pending_commit_ = true;
+            commit();
         }
     }
 
@@ -185,18 +193,26 @@ public:
         if((events_ & events) || (slot != slot_)) {
             events_ = events_ - events;
             slot_ = slot;
-            //commit();
-            pending_commit_ = true;
+            commit();
         }
     }
 
-    void commit() noexcept {
+    void commit(bool force=false) noexcept {
         // possible optimize more with constexpr if (epoll.is_et())....
-        if(pending_commit_) {
+        if(force || !(flags_ & PollFlags::BatchCtl) || (flags_ & PollFlags::PendingCtl) ) {
             //TOOLBOX_DEBUG<<"poll_commit "<<events_;
             ctl_(*this);
-            pending_commit_ = false;
+            flags_ &= ~PollFlags::PendingCtl;
         }
+    }
+
+    bool batching(bool enable) {
+        bool prev = flags_ & PollFlags::BatchCtl;
+        if(enable)
+            flags_ |= PollFlags::BatchCtl;
+        else
+            flags_ &= ~PollFlags::BatchCtl;
+        return prev;
     }
 
     /// adds events, keep slot
@@ -204,7 +220,7 @@ public:
         if((events_ & events) != events) {
             events_ = events_ + events;
             if(slot_)
-                pending_commit_ = true;
+                commit();
         }
     }
     /// adds events, change slot
@@ -212,38 +228,21 @@ public:
         if(slot!=slot_ || (events_ & events) != events) {
             slot_ = slot;
             events_ = events_ + events;
-            pending_commit_ = true;
+            commit();
         }
     }
 
-/* 
-    /// change events
-    void mod(PollEvents events) {
-        if(events_!=events) {
-            events_ = events;
-            pending_commit_ = true;
-        }
-    }
-    /// change events and slot
-    void mod(PollEvents events, IoSlot slot) {
-        if(events_!=events || slot!=slot_) {
-            slot_ = slot;
-            events_ = events;
-            pending_commit_ = true;
-        }
-    }
-*/
     /// change slot
     void mod(IoSlot slot) noexcept {
         if(slot_!=slot) {
             slot_ = slot;
-            pending_commit_ = true;
+            commit();
         }
     }
     IoSlot slot() const noexcept { return slot_; }
 protected:
     PollSlot ctl_{};
-    bool pending_commit_ {false};
+    std::int32_t flags_ {};
 };
 
 }

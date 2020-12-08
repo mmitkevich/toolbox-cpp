@@ -98,7 +98,6 @@ protected:
     void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
         if(accept_) {
             accept_.complete(poll(), sock());
-            poll().commit();
         }
     }  
 protected:

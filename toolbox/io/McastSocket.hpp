@@ -44,16 +44,13 @@ class BasicMcastSocket : public BasicSocket<SockT> {
     using Base::open, Base::bind;
     using Base::read, Base::write, Base::recv; 
 
-    void connect(const Endpoint& ep) {
-      
-    }
     template<typename AddrT, typename IfaceT>
     void join_group(const AddrT& addr, IfaceT iface) {
-      return Base::join_group(addr, std::forward<IfaceT>(iface));
+      Base::join_group(addr, std::forward<IfaceT>(iface));
     }
     template<typename AddrT, typename IfaceT>
     void leave_group(const AddrT& addr, IfaceT iface) {
-      return Base::leave_group(addr, std::forward<IfaceT>(iface));
+      Base::leave_group(addr, std::forward<IfaceT>(iface));
     }
 };
 

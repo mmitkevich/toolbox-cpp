@@ -166,6 +166,8 @@ find_package(CURL)
 include_directories(SYSTEM ${CURL_INCLUDE_DIR})
 
 find_package(PCAP)
+find_package(AERON)
+include_directories(SYSTEM ${AERON_INCLUDE_DIR})
 
 if(TOOLBOX_BUILD_SHARED)
   set(tb_core_LIBRARY tb-core-shared)

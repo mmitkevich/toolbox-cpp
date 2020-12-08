@@ -94,23 +94,15 @@ public:
         } else {
             poll().mod(io_slot());              // sync
         }
-        poll().commit();
     }
     
   protected:
     friend Base;
     using Base::io_slot, Base::on_io_event;
-    void on_sock_prepare(Sock& sock) {
-        Base::on_sock_prepare(sock);
-        if (sock.is_ip_family()) {
-            set_tcp_no_delay(sock.get(), true);
-        }
-    }
     IoSlot conn_slot() { return util::bind<&This::on_conn_event>(this); }
     void on_conn_event(CyclTime now, os::FD fd, PollEvents events) {
         if(conn_) {
             poll().mod(io_slot());   
-            poll().commit();         
             conn_.complete(*this, events);
         }
     }

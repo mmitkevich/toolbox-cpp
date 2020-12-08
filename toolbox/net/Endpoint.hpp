@@ -82,25 +82,10 @@ inline std::uint16_t get_port_number(struct sockaddr *sa) {
     }
 }
 
-inline IpAddr get_ip_address(struct sockaddr *sa) {
-    switch(sa->sa_family) {
-        case AF_INET: {
-            struct sockaddr_in *addr = (struct sockaddr_in *) sa;
-            return IpAddrV4((IpAddrV4::uint_type)ntohl(addr->sin_addr.s_addr));
-        }
-        case AF_INET6:
-            assert(false);
-            return IpAddrV6{};  // FIXME
-        default:
-            assert(false);
-            return IpAddr{};
-    }
-}
-
 template<typename ProtocolT>
 inline BasicIpEndpoint<ProtocolT> parse_ip_endpoint(const std::string& uri, int type=0, int default_family=AF_UNSPEC) {
     const auto ai = parse_endpoint(uri, type, default_family);
-    auto ipaddr = get_ip_address(ai->ai_addr);
+    auto ipaddr = os::get_ip_address(ai->ai_addr);
     std::uint16_t port = get_port_number(ai->ai_addr);
     return {ipaddr, port};
 }
@@ -128,7 +113,7 @@ struct TypeTraits<BasicIpEndpoint<ProtocolT>> {
     static auto from_string(std::string_view sv) { return from_string(std::string(sv)); }
     static auto from_string(const std::string& s, int type = SOCK_STREAM, int family=AF_INET) { 
         auto addrinfo = parse_endpoint(s, type, family);
-        BasicIpEndpoint<ProtocolT> result {get_ip_address(addrinfo->ai_addr), get_port_number(addrinfo->ai_addr)};
+        BasicIpEndpoint<ProtocolT> result {os::get_ip_address(addrinfo->ai_addr), get_port_number(addrinfo->ai_addr)};
         return result;
     }
 };

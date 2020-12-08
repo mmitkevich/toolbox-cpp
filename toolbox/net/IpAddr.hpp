@@ -19,6 +19,10 @@
 
 #include <boost/asio/ip/address.hpp>
 #include "toolbox/util/TypeTraits.hpp"
+#include "toolbox/sys/Error.hpp"
+#include <sys/socket.h>
+#include <ifaddrs.h>
+#include <sstream>
 
 namespace toolbox {
 inline namespace net {
@@ -26,9 +30,93 @@ inline namespace net {
 using IpAddr = boost::asio::ip::address;
 using IpAddrV4 = boost::asio::ip::address_v4;
 using IpAddrV6 = boost::asio::ip::address_v6;
+}
+namespace os {
 
-} // namespace net
+inline IpAddr get_ip_address(struct sockaddr *sa) {
+    switch(sa->sa_family) {
+        case AF_INET: {
+            struct sockaddr_in *addr = (struct sockaddr_in *) sa;
+            return IpAddrV4((IpAddrV4::uint_type)ntohl(addr->sin_addr.s_addr));
+        }
+        case AF_INET6:
+            assert(false);
+            return IpAddrV6{};  // FIXME
+        default:
+            assert(false);
+            return IpAddr{};
+    }
+}
 
+
+/// Returns the index of the network interface corresponding to the name ifname.
+inline unsigned if_nametoindex(const char* ifname, std::error_code& ec) noexcept
+{
+    unsigned ifindex{0};
+    if (ifname) {
+        if (!(ifindex = ::if_nametoindex(ifname))) {
+            ec = make_sys_error(errno);
+        }
+    }
+    return ifindex;
+}
+
+/// Returns the index of the network interface corresponding to the name ifname.
+inline unsigned if_nametoindex(const char* ifname)
+{
+    unsigned ifindex{0};
+    if (ifname) {
+        if (!(ifindex = ::if_nametoindex(ifname))) {
+            std::stringstream ss;
+            ss << "if_nametoindex" << ifname;
+            throw std::system_error{make_sys_error(errno), ss.str()};
+        }
+    }
+    return ifindex;
+}
+
+inline std::string if_addrtoname(const toolbox::IpAddr& addr) {
+    struct ifaddrs *addrs, *iap;
+    struct sockaddr_in *sa;
+    
+    std::string name;
+    ::getifaddrs(&addrs);
+    for (iap = addrs; iap != nullptr; iap = iap->ifa_next) {
+        if (iap->ifa_addr && (iap->ifa_flags & IFF_UP)) {
+            if(os::get_ip_address(iap->ifa_addr) == addr) {
+                name = iap->ifa_name;
+                break;
+            }
+        }
+    }
+    ::freeifaddrs(addrs);
+    return name;
+}
+
+inline std::string if_addrtoname(std::string_view addr) {
+    struct ifaddrs *addrs, *iap;
+    struct sockaddr_in *sa;
+    
+    std::string name;
+    ::getifaddrs(&addrs);
+    for (iap = addrs; iap != nullptr; iap = iap->ifa_next) {
+        if (iap->ifa_addr && (iap->ifa_flags & IFF_UP) && 
+            (iap->ifa_addr->sa_family==AF_INET/* || iap->ifa_addr->sa_family==AF_INET6*/)) {
+            if(os::get_ip_address(iap->ifa_addr).to_string() == addr) {
+                name = iap->ifa_name;
+                break;
+            }
+        }
+    }
+    ::freeifaddrs(addrs);
+    return name;
+}
+
+
+} // namespace os
+} // namespace toolbox
+
+namespace toolbox {
 inline namespace util {
 template <>
 struct TypeTraits<IpAddrV4> {

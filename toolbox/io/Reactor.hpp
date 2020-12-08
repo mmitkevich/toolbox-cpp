@@ -19,6 +19,8 @@
 #include <cstdint>
 #include <utility>
 
+#include <boost/mp11/algorithm.hpp>
+
 #include <toolbox/io/Scheduler.hpp>
 #include <toolbox/sys/Error.hpp>
 
@@ -93,7 +95,7 @@ public:
     using Handle = PollHandle;
     using Runner = BasicRunner<This>;
     using FD = os::FD;
-
+    using ImplsTuple = std::tuple<ImplsT...>;
     constexpr static std::size_t ImplsSize = sizeof...(ImplsT);
     static_assert(ImplsSize>0, "at least one implementation required");
 
@@ -132,6 +134,16 @@ public:
         return PollHandle{fd, ctl(fd)};
     }
 
+    template<typename T>
+    auto& get() {
+        return std::get<boost::mp11::mp_find<ImplsTuple, T>::value>(impls_);
+    }
+
+    template<typename T>
+    int socket() {
+        constexpr std::size_t index = boost::mp11::mp_find<ImplsTuple, T>::value;
+        return ((index<<CustomFDBits)|HighBitFDMask) + get<T>().socket();
+    }
     /// event loop cycle
     void run() {
         state(State::Starting);
