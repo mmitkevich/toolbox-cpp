@@ -2,11 +2,15 @@
 
 #include "toolbox/io/Buffer.hpp"
 #include "toolbox/io/Socket.hpp"
+#include "toolbox/net/Endpoint.hpp"
 #include <aeron/aeronc.h>
+#include "toolbox/net/ParsedUrl.hpp"
+#include "toolbox/net/Protocol.hpp"
 #include <system_error>
 #include <thread>
 #include <toolbox/sys/Error.hpp>
 #include <toolbox/util/Slot.hpp>
+#include <unordered_map>
 
 namespace toolbox {
 inline namespace aeron {
@@ -44,17 +48,51 @@ private:
 };
 
 
-class AeronEndpoint {
-public:
-    AeronEndpoint(std::string channel, int32_t stream = 1)
-    : channel_(std::move(channel))
-    , stream_(stream) {}
 
-    const std::string& channel() const { return channel_; }
-    int32_t stream() const { return stream_; }
+//aeron:udp?endpoint=192.168.0.1:40456|interface=192.168.0.3
+class AeronEndpoint : protected net::ParsedUrl {
+public:
+    enum class EndpointType: uint8_t {
+        Unknown,
+        Udp,
+        Ipc
+    };
+public: 
+    AeronEndpoint() = default;
+
+    AeronEndpoint(std::string_view s, int32_t stream)
+    : ParsedUrl(s)
+    , stream_(stream) {
+    }
+
+    EndpointType type() const {
+        if(proto().find("udp")!=std::string_view::npos)
+            return EndpointType::Udp;
+        if(proto().find("ipc")!=std::string_view::npos)
+            return EndpointType::Ipc;
+        return EndpointType::Unknown;
+    }
+    
+    std::string channel() const {
+        return std::string {param("channel")};
+    }
+
+    int32_t stream() const {
+        return stream_;
+    }
+
+    std::string_view interface() const {
+        return param("interface");
+    }
+    
+    UdpEndpoint udp_endpoint() {
+        return parse_ip_endpoint<UdpEndpoint>(param("endpoint"));
+    }
+    McastEndpoint mcast_endpoint() {
+       return parse_ip_endpoint<McastEndpoint>(param("endpoint"));
+    }
 private:
-    std::string channel_{};
-    int32_t stream_{};
+    int32_t stream_;
 };
 
 class Aeron {
@@ -158,22 +196,22 @@ class Aeron;
 
 using AeronFragmentSlot = Slot<void*, const uint8_t*,size_t, aeron_header_t*>;
 
-template<typename SelfT>
-class AeronPubAdd : public CompletionSlot<std::error_code>{
+template<typename SocketT>
+class AeronPubAdd : public CompletionSlot<std::error_code> {
 public:
-    using Endpoint = typename SelfT::Endpoint;
-    bool prepare(SelfT& self, const Endpoint& ep, Slot slot) {
-        const char* ch = ep.channel().c_str();
+    using Endpoint = typename SocketT::Endpoint;
+    bool prepare(SocketT& socket, const Endpoint& ep, Slot slot) {
+        const char* ch = ep.channel().data();
         auto strm = ep.stream();
         if (aeron_async_add_exclusive_publication(
-                &async_, self.aeron(), ch, strm) < 0) {
+                &async_, socket.aeron(), ch, strm) < 0) {
             std::error_code ec {::aeron_errcode(), std::system_category()};
             throw std::system_error{ec, ::aeron_errmsg()};
         }
         set_slot(slot);
         return false; //async
     }
-    bool complete(SelfT& self) {
+    bool complete(SocketT& socket) {
         aeron_exclusive_publication_t* pub{};
         int res = aeron_async_add_exclusive_publication_poll(&pub, async_);
         if (res < 0) {
@@ -186,7 +224,7 @@ public:
         if(pub!=nullptr) {
             async_ = nullptr;
             std::error_code ec {};
-            self.set(pub);
+            socket.pub(pub);
             notify(ec);
             return true;
         }
@@ -230,10 +268,7 @@ public:
         return true; // done
     }
 private:
-    aeron_async_add_exclusive_publication_t* add_ {};
-    ConstBuffer buf_;
-    ssize_t result_;
-    std::error_code ec_;
+    Buffer buf_;
 };
 
 class AeronPub {
@@ -275,15 +310,15 @@ public:
     bool empty() { return pub_==nullptr; }
 
     // async
-    void async_connect(const AeronEndpoint& ep, Slot<std::error_code> slot) {
+    void async_connect(const Endpoint& ep, Slot<std::error_code> slot) {
         connect_.prepare(*this, ep, slot);
     }
 
     // sync
-    void connect(const AeronEndpoint& ep) {
+    void connect(const Endpoint& ep) {
         aeron_async_add_exclusive_publication_t* async {};
         if (aeron_async_add_exclusive_publication(
-                &async, aeron_, ep.channel().data(), ep.stream()) < 0) {
+                &async, aeron_, ep.channel().c_str(), ep.stream()) < 0) {
             std::error_code ec {::aeron_errcode(), std::system_category()};
             throw std::system_error{ec, ::aeron_errmsg()};
         }        
@@ -320,13 +355,15 @@ public:
             pub_, static_cast<const uint8_t*>(buf), size, nullptr, nullptr);
         if(position>=0) {
             ec = {};
-            return position - prev_position;
+            ssize_t dpos = position - prev_position;
+            assert((ssize_t)size<=dpos);
+            return size;
         }
         ec = {(int)position, std::system_category()};
         return position;
     }
-    aeron_exclusive_publication_t* get() { return pub_; }
-    void set(aeron_exclusive_publication_t* pub) { pub_ = pub; }
+    aeron_exclusive_publication_t* pub() { return pub_; }
+    void pub(aeron_exclusive_publication_t* pub) { pub_ = pub; }
     aeron_t* aeron() { return aeron_; } 
 protected:
     PollHandle poll_;
@@ -336,7 +373,261 @@ protected:
     AeronPubOffer<This> write_;
 };
 
+template<typename SocketT>
+class AeronSubAdd : public CompletionSlot<std::error_code> {
+public:
+    using Endpoint = typename SocketT::Endpoint;
+    constexpr static aeron_on_available_image_t avail_image = nullptr;
+    constexpr static void *avail_image_data = nullptr; 
+    constexpr static aeron_on_unavailable_image_t unavail_image = nullptr;
+    constexpr static void *unavail_image_data = nullptr;
+
+    bool prepare(SocketT& socket, const Endpoint& ep, Slot slot) {
+        const char* ch = ep.channel().c_str();
+        auto strm = ep.stream();
+        if (aeron_async_add_subscription(
+                &async_, socket.aeron(), ch, strm, 
+                avail_image, avail_image_data, 
+                unavail_image, unavail_image_data) <0) {
+            std::error_code ec {::aeron_errcode(), std::system_category()};
+            throw std::system_error{ec, ::aeron_errmsg()};
+        }
+        set_slot(slot);
+        return false; //async
+    }
+    bool complete(SocketT& socket) {
+        aeron_subscription_t* sub{};
+        int res = aeron_async_add_subscription_poll(&sub, async_);
+        if (res < 0) {
+            async_ = nullptr;
+            std::error_code ec {::aeron_errcode(), std::system_category()};
+            notify(ec);
+            return true; // done
+        }
+    
+        if(sub!=nullptr) {
+            async_ = nullptr;
+            std::error_code ec {};
+            socket.sub(sub);
+            notify(ec);
+            return true;
+        }
+        return false; // continue poll
+    }
+private:
+    aeron_async_add_exclusive_publication_t* async_ {};
+};
 
 
-}
-}
+template<typename SocketT>
+class AeronSubPoll : public CompletionSlot<ssize_t, std::error_code> {
+public:
+    using Buffer = ConstBuffer;
+    bool prepare(SocketT& socket, const Buffer& buf, Slot slot) {
+        buf_ = buf;
+        set_slot(slot);
+        return false;
+    }
+    bool complete(SocketT& socket) {
+        std::error_code ec{};
+        auto size =  socket.write(buf_.data(), buf_.size(), ec);
+        if(aeron_again(size))
+            return false;
+        notify(size, ec);
+        return true; // done
+    }
+private:
+    aeron_async_add_exclusive_publication_t* add_ {};
+    ConstBuffer buf_;
+    ssize_t result_;
+    std::error_code ec_;
+};
+
+template<typename SocketT>
+class AeronSubRead : public CompletionSlot<ssize_t, std::error_code> {
+public:
+    using Buffer = MutableBuffer;
+    using This = AeronSubRead<SocketT>;
+    constexpr static int FragmentCountLimit = 10;
+
+    ~AeronSubRead() {
+        close();
+    }
+    void open() {
+        if (aeron_fragment_assembler_create(&frag_asm_, aeron_read_handler, this) < 0) {
+            std::error_code ec {::aeron_errcode(), std::system_category()};
+            throw std::system_error{ec, ::aeron_errmsg()};
+        }
+    }
+    void close() {
+        if(frag_asm_) {
+            aeron_fragment_assembler_delete(frag_asm_);
+            frag_asm_ = nullptr;
+        }
+    }
+    bool prepare(SocketT& socket, const Buffer& buf, Slot slot) {
+        buf_ = buf;
+        set_slot(slot);
+        return false;
+    }
+    template<bool with_notify=true>
+    bool complete(SocketT& socket) {
+        size_ = 0;
+        ssize_t nfrags = aeron_subscription_poll(
+            socket.sub(), aeron_fragment_assembler_handler, frag_asm_, FragmentCountLimit);
+        if (nfrags>0) {
+            assert(size_>=0);
+            ec_ = {};
+            if constexpr(with_notify)
+                notify(size_, ec_);
+            return true;
+        } else if (nfrags < 0) {
+            ec_ = {::aeron_errcode(), std::system_category()};
+            if constexpr(with_notify)
+                notify(nfrags, ec_);
+            return true;
+        }
+        return false; // nflags==0
+    }
+    void on_read(const uint8_t* buffer, size_t len, aeron_header_t* header) {
+        auto size = std::min(len, buf_.size());
+        std::memcpy(buf_.data(), buffer, size);
+        size_ = size;
+    }
+    static void aeron_read_handler(void *d, const uint8_t *buffer, size_t length, aeron_header_t *header) {
+        This* self = static_cast<This*>(d);
+        self->on_read(buffer, length, header);
+    }
+    ssize_t bytes_transferred() { return size_; }
+    std::error_code& get_error() { return ec_; }
+private:
+    aeron_async_add_exclusive_publication_t* add_ {};
+    Buffer buf_;
+    std::error_code ec_ {};
+    ssize_t size_ {};
+    aeron_fragment_assembler_t* frag_asm_{};
+};
+
+class AeronSub {
+public:
+    using Endpoint = AeronEndpoint;
+    using This = AeronSub;
+public:
+    AeronSub() = default;
+
+    template<typename ReactorT>
+    AeronSub(ReactorT& r)
+    : poll_{r.poll(r.template get<AeronPoll>().socket())}
+    , aeron_(r.template get<AeronPoll>().aeron()) {
+        poll_.add(PollEvents::Read, util::bind<&This::on_io_event>(this));
+        poll_.commit();
+    }
+    
+    AeronSub(const AeronSub&) = delete;
+    AeronSub& operator=(const AeronSub&) = delete;
+
+    AeronSub(AeronSub&&) = default;
+    AeronSub& operator=(AeronSub&&) = default;
+
+    ~AeronSub() {
+        close();
+    }
+    template<typename ReactorT>
+    void open(ReactorT& r) {
+        poll_ = r.poll(r.template get<AeronPoll>.socket());
+        aeron_ = r.template get<AeronPoll>().aeron();
+        poll_.add(PollEvents::Write, util::bind<&This::on_io_event>(this));
+        poll_.commit();
+    }
+    void close() {
+        if(sub_) {
+            aeron_subscription_close(sub_, nullptr, nullptr);
+        }
+    }
+    bool empty() { return sub_==nullptr; }
+
+    // async
+    void async_bind(const Endpoint& ep, Slot<std::error_code> slot) {
+        bind_.prepare(*this, ep, slot);
+    }
+
+    // sync
+    void bind(const Endpoint& ep) {
+        aeron_async_add_subscription_t* async {};
+        if (aeron_async_add_subscription(
+                &async, aeron_, ep.channel().data(), ep.stream(), 
+                bind_.avail_image, bind_.avail_image_data, bind_.unavail_image, bind_.unavail_image_data) < 0) {
+            std::error_code ec {::aeron_errcode(), std::system_category()};
+            throw std::system_error{ec, ::aeron_errmsg()};
+        }        
+        while(sub_==nullptr) {
+            if (aeron_async_add_subscription_poll(&sub_, async) < 0) {
+                std::error_code ec {::aeron_errcode(), std::system_category()};
+                throw std::system_error{ec, ::aeron_errmsg()};
+            }        
+        }
+        read_.open();
+    }
+
+    // TODO: refactor into on_poll(PollFD& fd)
+    void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
+        if(bind_) {
+            bind_.complete(*this);
+            return;
+        }
+        // do write_ while we can
+        while(read_) {
+            if(!read_.template complete<true>(*this)) {
+                break;
+            }
+        }
+    }
+
+    void async_read(MutableBuffer buf, Slot<ssize_t, std::error_code> slot) {
+        read_.prepare(*this, buf, slot);
+    }
+
+    ssize_t read(MutableBuffer buf, std::error_code& ec) {
+        read_.prepare(*this, buf, nullptr);
+        if(read_.complete<false>(*this)) {
+            ec = read_.get_error();
+            return read_.bytes_transferred();
+        }
+    }
+    ssize_t read(void* buf, std::size_t size, std::error_code &ec) {
+        return read(MutableBuffer(buf, size), ec);
+    }
+
+    
+
+    aeron_subscription_t* sub() { return sub_; }
+    void sub(aeron_subscription_t* sub) { 
+        sub_ = sub; 
+        read_.open();
+    }
+    aeron_t* aeron() { return aeron_; } 
+protected:
+    PollHandle poll_;
+    aeron_t* aeron_ {};
+    aeron_subscription_t* sub_ {};
+    AeronSubAdd<This> bind_; // async op
+    AeronSubRead<This> read_;
+};
+
+
+
+} //aeron
+} // toolbox
+namespace toolbox {
+inline namespace net {
+    template<>
+    struct EndpointTraits<AeronEndpoint> {
+        UdpEndpoint to_udp(AeronEndpoint& ep) {
+            return ep.udp_endpoint();
+        }
+        McastEndpoint to_mcast(AeronEndpoint& ep) {
+            return ep.mcast_endpoint();
+        }
+    };
+} // net
+} // toolbox

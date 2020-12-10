@@ -123,6 +123,8 @@ protected:
 class TOOLBOX_API PcapDevice
 {
 public:
+    using Packet = PcapPacket;
+    
     ~PcapDevice() { close(); }
     void input(std::string_view input) { input_ = input; }
     std::string input() const { return input_; }

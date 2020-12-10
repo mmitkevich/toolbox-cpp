@@ -23,6 +23,8 @@
 
 #include <toolbox/io/File.hpp>
 
+#include <boost/type_traits/is_detected.hpp>
+
 #include <memory>
 
 #include <net/if.h>
@@ -807,22 +809,16 @@ struct Sock : FileHandle {
 };
 
 struct SocketTraits {
-    // some traits
     template<typename SockT>
-    constexpr static bool has_sock_connect() { return false; }
-
+    using sock_connect_t = decltype(std::declval<SockT>().connect(std::declval<typename SockT::Endpoint>()));
     template<typename SockT>
-    constexpr static auto has_sock_connect() -> decltype(
-        std::declval<SockT>().connect(std::declval<typename SockT::Endpoint>()), bool())
-        { return true; }
-
+    using sock_accept_t = decltype(std::declval<SockT>().accept(std::declval<typename SockT::Endpoint>()));
+    
     template<typename SockT>
-    constexpr static bool has_sock_accept() { return false; }
-
+    constexpr static  bool has_connect = boost::is_detected_v<sock_connect_t, SockT>;
+    
     template<typename SockT>
-    constexpr static auto has_sock_accept() -> decltype(
-        std::declval<SockT>().accept(std::declval<typename SockT::Endpoint>()), bool())
-        { return true; }
+    constexpr static  bool has_accept = boost::is_detected_v<sock_connect_t, SockT>;
 };
 
 } // namespace net

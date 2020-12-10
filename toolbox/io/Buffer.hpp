@@ -27,6 +27,9 @@ inline namespace io {
 using ConstBuffer = boost::asio::const_buffer;
 using MutableBuffer = boost::asio::mutable_buffer;
 
+inline auto as_const_buffer(std::string_view s) { return ConstBuffer(s.data(),s.size()); }
+
+
 using boost::asio::buffer_cast;
 using boost::asio::buffer_size;
 

@@ -45,7 +45,7 @@ public:
 private:
    int family_, protocol_, type_;
 };
-
+/*
 struct DgramProtocol {
     friend bool operator==(DgramProtocol lhs, DgramProtocol rhs)
     {
@@ -99,6 +99,7 @@ struct StreamProtocol {
   private:
     int family_, protocol_;
 };
+*/
 
 struct UdpProtocol {
     friend bool operator==(UdpProtocol lhs, UdpProtocol rhs) { return lhs.family_ == rhs.family_; }
@@ -118,6 +119,7 @@ struct UdpProtocol {
     }
     int family_;
 };
+using DgramProtocol = UdpProtocol;
 
 struct TcpProtocol {
     friend bool operator==(TcpProtocol lhs, TcpProtocol rhs) { return lhs.family_ == rhs.family_; }
@@ -138,6 +140,8 @@ struct TcpProtocol {
     int family_;
 };
 
+using StreamProtocol = TcpProtocol;
+
 struct UnixDgramProtocol {
     constexpr int family() const noexcept { return AF_UNIX; }
     constexpr int type() const noexcept { return SOCK_DGRAM; }
@@ -149,6 +153,26 @@ struct UnixStreamProtocol {
     constexpr int type() const noexcept { return SOCK_STREAM; }
     constexpr int protocol() const noexcept { return 0; }
 };
+
+struct McastProtocol {
+    friend bool operator==(McastProtocol lhs, McastProtocol rhs) { return lhs.family_ == rhs.family_; }
+    friend bool operator!=(McastProtocol lhs, McastProtocol rhs) { return lhs.family_ != rhs.family_; }
+
+    static constexpr auto v4() noexcept { return McastProtocol{AF_INET}; }
+    static constexpr auto v6() noexcept { return McastProtocol{AF_INET6}; }
+
+    constexpr int family() const noexcept { return family_; }
+    constexpr int type() const noexcept { return SOCK_DGRAM; }
+    constexpr int protocol() const noexcept { return IPPROTO_UDP; }
+
+  private:
+    constexpr explicit McastProtocol(int family) noexcept
+    : family_{family}
+    {
+    }
+    int family_;
+};
+
 
 } // namespace net
 } // namespace toolbox

@@ -150,4 +150,6 @@ class Log {
 #endif
 // clang-format on
 
+#define TOOLBOX_DUMP_THIS TOOLBOX_DUMP << __FILE__<<":"<<__LINE__<<" "<<__func__<<"() this="<<std::hex<<this;
+
 #endif // TOOLBOX_SYS_LOG_HPP

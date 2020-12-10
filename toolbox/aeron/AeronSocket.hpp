@@ -9,27 +9,31 @@ inline namespace aeron {
 
 class AeronContext;
 
-
-class AeronSocket: public AeronPub {
+class AeronSocket: public AeronPub, public AeronSub {
 public:
-    using Endpoint = AeronEndpoint;
-    using Base = AeronPub;
+    using Endpoint = typename AeronPub::Endpoint;
 public:
     template<class ReactorT>
     AeronSocket(ReactorT& r)
-    : Base {r} {}
+    : AeronPub {r}
+    , AeronSub {r}
+    {}
     
     AeronSocket() = default;
 
     template<class ReactorT>
     void open(ReactorT& r) {
-        aeron_ = & r.template get<AeronPoll>().aeron();
-        Base::open(aeron_);
+        AeronPub::open(r);
+        AeronSub::open(r);
+    }
+    void close() {
+        AeronPub::close();
+        AeronSub::close();
     }
 
     void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
-        //sub_.on_io_event(now, fd, events);
-        Base::on_io_event(now, fd, events);
+        AeronSub::on_io_event(now, fd, events);
+        AeronSub::on_io_event(now, fd, events);
     }
 private:
     //AeronSub sub_;

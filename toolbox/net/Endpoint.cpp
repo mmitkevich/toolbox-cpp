@@ -24,7 +24,7 @@ namespace toolbox {
 inline namespace net {
 namespace {
 
-pair<string, string> split_ip_addr(const string& addr, char delim)
+pair<string, string> split_ip_addr(string_view addr, char delim)
 {
     // Reverse find for compatibility with ipv6 address notation.
     const auto pos = addr.find_last_of(delim);
@@ -42,7 +42,7 @@ pair<string, string> split_ip_addr(const string& addr, char delim)
     return {node, service};
 }
 
-pair<string, string> split_uri(const string& uri)
+pair<string, string> split_uri(string_view uri)
 {
     const auto pos = uri.find("://");
     string scheme, addr;
@@ -56,7 +56,7 @@ pair<string, string> split_uri(const string& uri)
 }
 } // namespace
 
-AddrInfoPtr parse_endpoint(const string& uri, int type, int default_family/*=-1*/)
+AddrInfoPtr parse_endpoint(std::string_view uri, int type, int default_family/*=-1*/)
 {
     int family{default_family}, protocol{0};
     const auto [scheme, addr] = split_uri(uri);
@@ -100,7 +100,7 @@ AddrInfoPtr parse_endpoint(const string& uri, int type, int default_family/*=-1*
         }
     }
     if (family < 0) {
-        throw invalid_argument{"invalid uri: "s + uri};
+        throw invalid_argument{"invalid uri: "s + std::string{uri}};
     }
     auto [node, service] = split_ip_addr(addr, ':');
     return os::getaddrinfo(!node.empty() ? node.c_str() : nullptr,

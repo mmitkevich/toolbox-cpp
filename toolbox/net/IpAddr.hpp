@@ -33,10 +33,10 @@ using IpAddrV6 = boost::asio::ip::address_v6;
 }
 namespace os {
 
-inline IpAddr get_ip_address(struct sockaddr *sa) {
+inline IpAddr ip_address(const struct sockaddr *sa) {
     switch(sa->sa_family) {
         case AF_INET: {
-            struct sockaddr_in *addr = (struct sockaddr_in *) sa;
+            const struct sockaddr_in *addr = (const struct sockaddr_in *) sa;
             return IpAddrV4((IpAddrV4::uint_type)ntohl(addr->sin_addr.s_addr));
         }
         case AF_INET6:
@@ -48,7 +48,43 @@ inline IpAddr get_ip_address(struct sockaddr *sa) {
     }
 }
 
+inline IpAddr ip_address(const struct addrinfo *ai) {
+    switch(ai->ai_family) {
+        case AF_INET: case AF_INET6: {
+            return os::ip_address((struct sockaddr *)(ai->ai_addr));
+        }
+        default:
+            assert(false);
+            return IpAddr{};
+    }
+}
 
+inline std::uint16_t port_number(const struct sockaddr *sa) {
+    switch(sa->sa_family) {
+        case AF_INET: {
+            const struct sockaddr_in* addr = (const struct sockaddr_in *) sa;
+            return ntohs(addr->sin_port);
+        }
+        case AF_INET6: {
+            const struct sockaddr_in6* addr = (const struct sockaddr_in6 *) sa;
+            return ntohs(addr->sin6_port);
+        }
+        default:
+            assert(false);
+            return 0;
+    }
+}
+
+inline std::int16_t port_number(const struct addrinfo *ai) {
+    switch(ai->ai_family) {
+        case AF_INET: case AF_INET6: {
+            return os::port_number((const struct sockaddr *)(ai->ai_addr));
+        }
+        default:
+            assert(false);
+            return 0;
+    }
+}
 /// Returns the index of the network interface corresponding to the name ifname.
 inline unsigned if_nametoindex(const char* ifname, std::error_code& ec) noexcept
 {
@@ -83,7 +119,7 @@ inline std::string if_addrtoname(const toolbox::IpAddr& addr) {
     ::getifaddrs(&addrs);
     for (iap = addrs; iap != nullptr; iap = iap->ifa_next) {
         if (iap->ifa_addr && (iap->ifa_flags & IFF_UP)) {
-            if(os::get_ip_address(iap->ifa_addr) == addr) {
+            if(os::ip_address(iap->ifa_addr) == addr) {
                 name = iap->ifa_name;
                 break;
             }
@@ -102,7 +138,7 @@ inline std::string if_addrtoname(std::string_view addr) {
     for (iap = addrs; iap != nullptr; iap = iap->ifa_next) {
         if (iap->ifa_addr && (iap->ifa_flags & IFF_UP) && 
             (iap->ifa_addr->sa_family==AF_INET/* || iap->ifa_addr->sa_family==AF_INET6*/)) {
-            if(os::get_ip_address(iap->ifa_addr).to_string() == addr) {
+            if(os::ip_address(iap->ifa_addr).to_string() == addr) {
                 name = iap->ifa_name;
                 break;
             }

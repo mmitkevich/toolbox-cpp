@@ -85,6 +85,7 @@ struct TypeTraits<toolbox::optional<T>> {
     static toolbox::optional<T> from_string(const std::string& s) noexcept { return TypeTraits<T>::from_string(s); }
 };
 
+
 } // namespace util
 } // namespace toolbox
 

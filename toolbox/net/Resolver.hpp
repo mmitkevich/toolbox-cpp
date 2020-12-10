@@ -71,11 +71,12 @@ class TOOLBOX_API Resolver {
 
 /// Wait for future and convert result to endpoint.
 template <typename EndpointT>
-EndpointT get_endpoint(AddrInfoFuture& future)
+EndpointT ip_endpoint(AddrInfoFuture& future)
 {
-    const auto ai = future.get();
+    const auto aiptr = future.get();
     assert(!future.valid());
-    return {ai->ai_addr, ai->ai_addrlen, ai->ai_protocol};
+    return EndpointT(os::ip_address(aiptr.get()), os::port_number(aiptr.get())) ;
+    // return { ai->ai_addr, ai->ai_addrlen, ai->ai_protocol}
 }
 
 /// Returns true if future is ready.

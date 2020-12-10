@@ -25,8 +25,8 @@ inline namespace net {
 
 /// Connectionless Datagram Socket. All state is in base class, so object can be sliced.
 struct DgramSock : IoSock {
-    using Protocol = DgramProtocol;
-    using Endpoint = DgramEndpoint;
+    using Protocol = UdpProtocol;
+    using Endpoint = UdpEndpoint;
 
     using IoSock::IoSock;
 

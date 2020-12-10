@@ -17,9 +17,11 @@
 #ifndef TOOLBOX_NET_MCASTSOCK_HPP
 #define TOOLBOX_NET_MCASTSOCK_HPP
 
+#include "toolbox/net/Protocol.hpp"
 #include <toolbox/net/Endpoint.hpp>
 #include <toolbox/net/IoSock.hpp>
 #include <toolbox/net/IpAddr.hpp>
+#include <toolbox/net/DgramSock.hpp>
 
 namespace toolbox {
 inline namespace net {
@@ -229,19 +231,20 @@ inline void set_ip_mcast_ttl(int sockfd, int family, int ttl)
     }
 }
 
-/// Connectionless Datagram Socket. All state is in base class, so object can be sliced.
-struct McastSock : IoSock {
-    using Protocol = UdpProtocol;
-    using Endpoint = UdpEndpoint;
 
-    using IoSock::IoSock;
+/// Connectionless Datagram Socket. All state is in base class, so object can be sliced.
+struct McastSock : DgramSock {
+    using Protocol = McastProtocol;
+    using Endpoint = McastEndpoint;
+
+    using DgramSock::DgramSock;
 
     McastSock(Protocol protocol, std::error_code& ec) noexcept
-    : IoSock{os::socket(protocol, ec), protocol.family()}
+    : DgramSock{os::socket(protocol, ec), protocol.family()}
     {
     }
     explicit McastSock(Protocol protocol)
-    : IoSock{os::socket(protocol), protocol.family()}
+    : DgramSock{os::socket(protocol), protocol.family()}
     {
     }
     McastSock() noexcept = default;
@@ -254,12 +257,33 @@ struct McastSock : IoSock {
     void get_sock_name(Endpoint& ep) { os::getsockname(get(), ep); }
     void bind(const Endpoint& ep, std::error_code& ec) noexcept { os::bind(get(), ep, ec); }
     void bind(const Endpoint& ep) { os::bind(get(), ep); }
-    /*void connect(const Endpoint& ep, std::error_code& ec) noexcept
-    {
-        return os::connect(get(), ep, ec);
+    
+    // Mcast connect is join_group
+    void connect(const Endpoint& ep, std::error_code& ec) noexcept {
+        if(!ep.interface().empty())
+            join_group(ep.address(), ep.interface().c_str(), ec);
+        else
+            join_group(ep.address(), ep.interface_index(), ec);
     }
-    void connect(const Endpoint& ep) { return os::connect(get(), ep); }*/
-
+    void connect(const Endpoint& ep) { 
+         if(!ep.interface().empty())
+            join_group(ep.address(), ep.interface().c_str());
+        else
+            join_group(ep.address(), ep.interface_index());
+    }
+    // Mcast disconnect is leave_group
+    void disconnect(const Endpoint& ep, std::error_code& ec) noexcept {
+        if(!ep.interface().empty())
+            leave_group(ep.address(), ep.interface().c_str(), ec);
+        else
+            leave_group(ep.address(), ep.interface_index(), ec);
+    }
+    void disconnect(const Endpoint& ep) { 
+         if(!ep.interface().empty())
+            leave_group(ep.address(), ep.interface().c_str());
+        else
+            leave_group(ep.address(), ep.interface_index());
+    }
     ssize_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep,
                      std::error_code& ec) noexcept
     {

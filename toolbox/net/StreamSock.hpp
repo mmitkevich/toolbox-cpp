@@ -80,11 +80,12 @@ struct StreamSockClnt : IoSock {
         os::getsockname(get(), ep, ec);
     }
     void get_sock_name(Endpoint& ep) { os::getsockname(get(), ep); }
-    void connect(const Endpoint& ep, std::error_code& ec) noexcept
-    {
-        return os::connect(get(), ep, ec);
-    }
+    void connect(const Endpoint& ep, std::error_code& ec) noexcept { return os::connect(get(), ep, ec); }
     void connect(const Endpoint& ep) { return os::connect(get(), ep); }
+    
+    // for compat with McastSock::disconnect
+    void disconnect(const Endpoint& ep) noexcept  {  }
+    
     void set_tcp_no_delay(bool enabled) {
         net::set_tcp_no_delay(get(), enabled);
     }

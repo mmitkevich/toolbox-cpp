@@ -180,7 +180,7 @@ class EchoClnt : public StreamConnector<EchoClnt> {
                 return;
             }
             try {
-                ep_ = get_endpoint<Endpoint>(aifuture_);
+                ep_ = ip_endpoint<TcpEndpoint>(aifuture_);
             } catch (const std::exception& e) {
                 TOOLBOX_ERROR << "failed to resolve address: " << e.what();
                 aifuture_ = resolver_.resolve(uri_, SOCK_STREAM);
