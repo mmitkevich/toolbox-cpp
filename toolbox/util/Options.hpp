@@ -78,19 +78,19 @@ class Value : public Presence<Value> {
     }
 
     // this uses dummy argument to deduce type
-    template <typename VarT, typename ValueT>
-    explicit Value(VarT &var, ValueT dummyType)
-    : func_{[&var](std::string_view arg) { 
-        var = from_string<ValueT>(arg); 
+    template <typename HashT, typename ValueT>
+    explicit Value(HashT &var, std::string_view key, ValueT dummyType)
+    : func_{[&var, key](std::string_view arg) { 
+        var[key] = from_string<ValueT>(arg); 
       }}
     {
     }
 
     // this uses dummy argument to deduce type, and does push_back
-    template <typename VarT, typename ValueT>
-    explicit Value(VarT &var, std::vector<ValueT> dummyType)
-    : func_{[&var](std::string_view arg) { 
-        var.push_back(from_string<ValueT>(arg));
+    template <typename HashT, typename ValueT>
+    explicit Value(HashT &var, std::string_view key, std::vector<ValueT> dummyType)
+    : func_{[&var, key](std::string_view arg) { 
+        var[key].push_back(from_string<ValueT>(arg));
     }}
     {
     }
