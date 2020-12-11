@@ -131,22 +131,22 @@ public:
         return std::string_view(value_.str_, size_);
     }
     bool is_int64() const noexcept { return element_type_ == element_type::INT64; }
-    std::int64_t get_int64() {
+    std::int64_t get_int64() const {
         assert_type(element_type::INT64);
         return value_.int_;
     }
     bool is_uint64() const noexcept { return element_type_ == element_type::UINT64; }
-    std::uint64_t get_uint64() {
+    std::uint64_t get_uint64() const  {
         assert_type(element_type::UINT64);
         return value_.int_;
     }    
     bool is_double() const noexcept { return element_type_ == element_type::DOUBLE; }
-    double get_double() {
+    double get_double() const {
         assert_type(element_type::DOUBLE);
         return value_.dbl_;
     }    
     bool is_bool() const noexcept { return element_type_ == element_type::BOOL; }
-    double get_bool() {
+    double get_bool() const {
         assert_type(element_type::BOOL);
         return value_.bool_;
     }        
@@ -265,6 +265,8 @@ public:
         }
         return size_; 
     }
+
+    void swap(MutableElement& rhs);
 
     template<typename T>
     bool copy(std::vector<T> &result) const {
@@ -460,7 +462,14 @@ public:
     T get() {
         return TypeTraits<T>::from_string(to_string());
     }
-    
+
+    template<typename T>
+    auto& set(std::string_view key, T val) {
+        auto &e = at(key);
+        e = val;
+        return e;
+    }
+
     template<typename T>
     T value_or(std::string_view key, T dflt) const {
         switch(element_type_)
@@ -492,10 +501,10 @@ public:
     }
     
     template<typename ElementT>
-    static inline void copy(ElementT ve, MutableElement& result);
+    static inline void copy(const ElementT& ve, MutableElement& result);
 
     template<typename ElementT>
-    static inline auto to_object(ElementT &e) {
+    static inline auto to_object(const ElementT &e) {
     if constexpr(std::is_same_v<ElementT, simdjson::dom::element>) {
         return simdjson::dom::object(e);
     } else {
@@ -599,9 +608,45 @@ public:
     std::string_view alloc_string(std::string_view str) {
         return strings_.intern(str);
     }
-    MutableDocument(const MutableElement &rhs) {
-        *static_cast<MutableElement*>(this) = rhs;
+    MutableDocument(const MutableElement& rhs) {
+        MutableElement::copy(rhs, *this);
+        //*static_cast<MutableElement*>(this) = rhs;
     }
+    MutableDocument& operator=(const MutableElement& rhs) {
+        clear();
+        MutableElement::copy(rhs, *this);
+        return *this;
+    }
+    MutableDocument(const MutableDocument& rhs) 
+    : MutableElement()
+    {
+        MutableElement::copy(rhs, *this);
+        //*static_cast<MutableElement*>(this) = rhs;
+    }
+    MutableDocument& operator=(const MutableDocument& rhs) {
+        clear();
+        MutableElement::copy(rhs, *this);
+        return *this;
+    }
+    void clear() {
+        MutableElement::clear();
+        strings_.clear();
+        elements_.clear();
+    }
+    MutableDocument(MutableDocument&& rhs)
+    : MutableElement(this) {
+        swap(rhs);
+    }
+    MutableDocument& operator=(MutableDocument&& rhs) {
+        swap(rhs);
+        return *this;
+    }
+    void swap(MutableDocument &rhs) {
+        MutableElement::swap(rhs);
+        std::swap(elements_, rhs.elements_);
+        std::swap(strings_, rhs.strings_);
+    }
+
     void parse_file(std::string_view path) {
         auto buf = get_file_contents(path.data());
         cpp_comments_to_whitespace(buf);
@@ -778,6 +823,11 @@ inline MutableElement::MutableElement(std::string_view val) {
     size_ = val.size();
     // document_==nullptr it means that string is not yet copied into document
 }
+inline void MutableElement::swap(MutableElement &rhs) {
+    std::swap(element_type_, rhs.element_type_);
+    std::swap(size_, rhs.size_);
+    std::swap(value_, rhs.value_);
+}
 inline MutableElement& MutableElement::operator=(MutableElement&& rhs) {
     assert(this!=&rhs);
     assert(rhs.document_==nullptr || document_==rhs.document_);
@@ -806,7 +856,7 @@ inline MutableElement& MutableElement::operator=(MutableElement&& rhs) {
 
 
 template<typename ElementT>
-inline void MutableElement::copy(ElementT ve, MutableElement& result) {
+inline void MutableElement::copy(const ElementT& ve, MutableElement& result) {
     switch(ve.type()) {
         case ElementType::BOOL: result = MutableElement(ve.get_bool()); break;
         case ElementType::INT64: result = MutableElement(ve.get_int64()); break;
