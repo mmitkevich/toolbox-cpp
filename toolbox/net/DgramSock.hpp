@@ -41,54 +41,37 @@ struct DgramSock : IoSock {
     DgramSock() noexcept = default;
 
     // Logically const.
-    void get_sock_name(Endpoint& ep, std::error_code& ec) noexcept
-    {
-        os::getsockname(get(), ep, ec);
-    }
+    void get_sock_name(Endpoint& ep, std::error_code& ec) noexcept { os::getsockname(get(), ep, ec); }
     void get_sock_name(Endpoint& ep) { os::getsockname(get(), ep); }
+
     void bind(const Endpoint& ep, std::error_code& ec) noexcept { os::bind(get(), ep, ec); }
     void bind(const Endpoint& ep) { os::bind(get(), ep); }
-    void connect(const Endpoint& ep, std::error_code& ec) noexcept
-    {
-        return os::connect(get(), ep, ec);
-    }
-    void connect(const Endpoint& ep) { return os::connect(get(), ep); }
 
-    ssize_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep,
-                     std::error_code& ec) noexcept
-    {
+    ssize_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep, std::error_code& ec) noexcept {
         return os::recvfrom(get(), buf, len, flags, ep, ec);
     }
-    std::size_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep)
-    {
+    std::size_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep) {
         return os::recvfrom(get(), buf, len, flags, ep);
     }
 
-    ssize_t recvfrom(MutableBuffer buf, int flags, Endpoint& ep, std::error_code& ec) noexcept
-    {
+    ssize_t recvfrom(MutableBuffer buf, int flags, Endpoint& ep, std::error_code& ec) noexcept {
         return os::recvfrom(get(), buf, flags, ep, ec);
     }
-    std::size_t recvfrom(MutableBuffer buf, int flags, Endpoint& ep)
-    {
+    std::size_t recvfrom(MutableBuffer buf, int flags, Endpoint& ep) {
         return os::recvfrom(get(), buf, flags, ep);
     }
 
     ssize_t sendto(const void* buf, std::size_t len, int flags, const Endpoint& ep,
-                   std::error_code& ec) noexcept
-    {
+                   std::error_code& ec) noexcept {
         return os::sendto(get(), buf, len, flags, ep, ec);
     }
-    std::size_t sendto(const void* buf, std::size_t len, int flags, const Endpoint& ep)
-    {
+    std::size_t sendto(const void* buf, std::size_t len, int flags, const Endpoint& ep) {
         return os::sendto(get(), buf, len, flags, ep);
     }
-
-    ssize_t sendto(ConstBuffer buf, int flags, const Endpoint& ep, std::error_code& ec) noexcept
-    {
+    ssize_t sendto(ConstBuffer buf, int flags, const Endpoint& ep, std::error_code& ec) noexcept {
         return os::sendto(get(), buf, flags, ep, ec);
     }
-    std::size_t sendto(ConstBuffer buf, int flags, const Endpoint& ep)
-    {
+    std::size_t sendto(ConstBuffer buf, int flags, const Endpoint& ep) {
         return os::sendto(get(), buf, flags, ep);
     }
 };

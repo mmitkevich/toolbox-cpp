@@ -810,9 +810,9 @@ struct Sock : FileHandle {
 
 struct SocketTraits {
     template<typename SockT>
-    using sock_connect_t = decltype(std::declval<SockT>().connect(std::declval<typename SockT::Endpoint>()));
+    using sock_connect_t = decltype(std::declval<SockT&>().connect(std::declval<typename SockT::Endpoint const &>()));
     template<typename SockT>
-    using sock_accept_t = decltype(std::declval<SockT>().accept(std::declval<typename SockT::Endpoint>()));
+    using sock_accept_t = decltype(std::declval<SockT&>().accept(std::declval<typename SockT::Endpoint const&>()));
     
     template<typename SockT>
     constexpr static  bool has_connect = boost::is_detected_v<sock_connect_t, SockT>;

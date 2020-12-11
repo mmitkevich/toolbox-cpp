@@ -52,6 +52,17 @@ class BasicMcastSocket : public BasicSocket<SockT> {
     void leave_group(const AddrT& addr, IfaceT iface) {
       Base::leave_group(addr, std::forward<IfaceT>(iface));
     }
+    void connect(const Endpoint& ep) {
+      Base::connect(ep);
+    }
+    void disconnect(const Endpoint& ep) {
+      Base::disconnect(ep);
+    }
+    void async_connect(const Endpoint& ep, util::Slot<std::error_code> slot) {
+      std::error_code ec {};
+      Base::connect(ep, ec);
+      slot(ec);
+    }
 };
 
 using McastSocket = BasicMcastSocket<McastSock>;
