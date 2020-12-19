@@ -22,7 +22,7 @@
 
 #include <boost/container/small_vector.hpp>
 #include <toolbox/util/Traits.hpp>
-
+#include <system_error>
 #include <utility>
 #include <algorithm>
 
@@ -95,6 +95,16 @@ class BasicSlot {
     {
         obj_ = nullptr;
         fn_ = nullptr;
+    }
+
+    bool connect(BasicSlot rhs) noexcept {
+        *this = rhs;
+        return true;
+    }
+
+    bool disconnect(BasicSlot rhs) noexcept {
+        reset();
+        return true;
     }
 
   private:
@@ -189,6 +199,10 @@ private:
 
 template<typename...Args>
 using Signal = BasicSignal<16, Args...>;
+
+using DoneSlot = Slot<std::error_code>;
+using SizeSlot = Slot<ssize_t, std::error_code>;
+
 
 } // namespace util
 } // namespace toolbox

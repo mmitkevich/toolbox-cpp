@@ -4,14 +4,13 @@
 #include "toolbox/net/IpAddr.hpp"
 #include "toolbox/util/TypeTraits.hpp"
 #include <algorithm>
+#include <optional>
 
-namespace toolbox {
-
-inline namespace net {
+namespace toolbox { inline namespace net {
 
 struct EndpointFilter {
-    optional<toolbox::net::IpAddr> address;
-    optional<std::uint32_t> port;
+    std::optional<toolbox::net::IpAddr> address;
+    std::optional<std::uint32_t> port;
     
     template<typename EndpointT>
     TOOLBOX_ALWAYS_INLINE bool match(const EndpointT& ep) const {
@@ -71,8 +70,8 @@ struct EndpointsFilter {
        return os;
     }
 };
-} // ns net
-inline namespace util {
+}} // toolbox::net
+namespace toolbox  { inline namespace util {
 template <>
 struct TypeTraits<EndpointFilter> {
     static EndpointFilter from_string(std::string_view sv) { return from_string(std::string(sv)); }
@@ -90,5 +89,4 @@ struct TypeTraits<EndpointFilter> {
         }
     }
 };
-} // ns util
-} // ns toolbox
+}} // ns toolbox::util

@@ -408,7 +408,7 @@ inline ssize_t recvfrom(int sockfd, void* buf, std::size_t len, int flags, Endpo
 
 /// Receive a message from a socket.
 template <typename EndpointT>
-inline std::size_t recvfrom(int sockfd, void* buf, std::size_t len, int flags, EndpointT& ep)
+inline ssize_t recvfrom(int sockfd, void* buf, std::size_t len, int flags, EndpointT& ep)
 {
     socklen_t addrlen = ep.capacity();
     const auto ret = recvfrom(sockfd, buf, len, flags, *ep.data(), addrlen);
@@ -812,13 +812,24 @@ struct SocketTraits {
     template<typename SockT>
     using sock_connect_t = decltype(std::declval<SockT&>().connect(std::declval<typename SockT::Endpoint const &>()));
     template<typename SockT>
-    using sock_accept_t = decltype(std::declval<SockT&>().accept(std::declval<typename SockT::Endpoint const&>()));
-    
-    template<typename SockT>
     constexpr static  bool has_connect = boost::is_detected_v<sock_connect_t, SockT>;
     
     template<typename SockT>
+    using sock_accept_t = decltype(std::declval<SockT&>().accept(std::declval<typename SockT::Endpoint const&>()));    
+    template<typename SockT>
     constexpr static  bool has_accept = boost::is_detected_v<sock_connect_t, SockT>;
+
+    template<typename SockT>
+    using sock_sendto_t = decltype(std::declval<SockT&>().sendto(std::declval<ConstBuffer>(), std::declval<int>(), 
+        std::declval<typename SockT::Endpoint const&>(),std::declval<std::error_code&>()));
+    template<typename SockT>
+    constexpr static  bool has_sendto = boost::is_detected_v<sock_sendto_t, SockT>;
+
+    template<typename SockT>
+    using sock_recvfrom_t = decltype(std::declval<SockT&>().recvfrom(std::declval<MutableBuffer>(), std::declval<int>(), 
+        std::declval<typename SockT::Endpoint&>(),std::declval<std::error_code&>()));
+    template<typename SockT>
+    constexpr static  bool has_recvfrom = boost::is_detected_v<sock_recvfrom_t, SockT>;
 };
 
 } // namespace net

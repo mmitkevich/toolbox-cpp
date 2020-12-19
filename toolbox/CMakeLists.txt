@@ -65,7 +65,7 @@ set(lib_SOURCES
   io/Timer.cpp
   io/TimerFd.cpp
   io/StreamSocket.cpp
-  io/ServerSocket.cpp
+  io/StreamServerSocket.cpp
   ipc/Futex.cpp
   ipc/Mmap.cpp
   ipc/MpmcQueue.cpp

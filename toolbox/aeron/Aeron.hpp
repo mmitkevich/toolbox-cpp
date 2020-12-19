@@ -200,7 +200,7 @@ template<typename SocketT>
 class AeronPubAdd : public CompletionSlot<std::error_code> {
 public:
     using Endpoint = typename SocketT::Endpoint;
-    bool prepare(SocketT& socket, const Endpoint& ep, Slot slot) {
+    bool prepare(SocketT& socket, const Endpoint& ep, SlotImpl slot) {
         const char* ch = ep.channel().data();
         auto strm = ep.stream();
         if (aeron_async_add_exclusive_publication(
@@ -254,7 +254,7 @@ template<typename SelfT>
 class AeronPubOffer : public CompletionSlot<ssize_t, std::error_code> {
 public:
     using Buffer = ConstBuffer;
-    bool prepare(SelfT& self, const Buffer& buf, Slot slot) {
+    bool prepare(SelfT& self, const Buffer& buf, SlotImpl slot) {
         buf_ = buf;
         set_slot(slot);
         return false;
@@ -382,7 +382,7 @@ public:
     constexpr static aeron_on_unavailable_image_t unavail_image = nullptr;
     constexpr static void *unavail_image_data = nullptr;
 
-    bool prepare(SocketT& socket, const Endpoint& ep, Slot slot) {
+    bool prepare(SocketT& socket, const Endpoint& ep, SlotImpl slot) {
         const char* ch = ep.channel().c_str();
         auto strm = ep.stream();
         if (aeron_async_add_subscription(
@@ -423,7 +423,7 @@ template<typename SocketT>
 class AeronSubPoll : public CompletionSlot<ssize_t, std::error_code> {
 public:
     using Buffer = ConstBuffer;
-    bool prepare(SocketT& socket, const Buffer& buf, Slot slot) {
+    bool prepare(SocketT& socket, const Buffer& buf, SlotImpl slot) {
         buf_ = buf;
         set_slot(slot);
         return false;
@@ -465,7 +465,7 @@ public:
             frag_asm_ = nullptr;
         }
     }
-    bool prepare(SocketT& socket, const Buffer& buf, Slot slot) {
+    bool prepare(SocketT& socket, const Buffer& buf, SlotImpl slot) {
         buf_ = buf;
         set_slot(slot);
         return false;

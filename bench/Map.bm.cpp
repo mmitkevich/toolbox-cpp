@@ -70,7 +70,7 @@ TOOLBOX_BENCHMARK(std_map_insert_erase)
 
 TOOLBOX_BENCHMARK(std_unordered_map_insert_erase)
 {
-    unordered_map<int, Elem> m;
+    std::unordered_map<int, Elem> m;
 
     size_t i{0};
     while (ctx) {
@@ -108,7 +108,7 @@ TOOLBOX_BENCHMARK(std_map_immutable)
 
 TOOLBOX_BENCHMARK(std_unordered_map_immutable)
 {
-    unordered_map<int, Elem> m;
+    std::unordered_map<int, Elem> m;
 
     size_t i{0};
     while (ctx) {

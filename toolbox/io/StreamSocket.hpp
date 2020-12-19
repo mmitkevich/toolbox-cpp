@@ -38,13 +38,16 @@ class SocketConnect : public CompletionSlot<std::error_code> {
     using Socket=SocketT;
     using Endpoint=typename Socket::Endpoint;
     using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot, Base::reset;
+    using typename Base::SlotImpl;
+    using State = typename SocketT::State;
 
-    bool prepare(Socket& socket, const Endpoint& ep, Slot slot) {
+    bool prepare(Socket& socket, const Endpoint& ep, SlotImpl slot) {
         if(*this) {
             throw std::system_error { make_error_code(std::errc::operation_in_progress), "connect" };
         }
         set_slot(slot);
         std::error_code ec {};
+        socket.remote() = ep;
         socket.connect(ep, ec);
         if (ec.value() == EINPROGRESS) { //ec != std::errc::operation_in_progress
             socket.poll().add(PollEvents::Write);
@@ -59,9 +62,10 @@ class SocketConnect : public CompletionSlot<std::error_code> {
         std::error_code ec{};
         if((events & PollEvents::Error)) {
             ec = socket.get_error();
-            socket.state(SocketState::Disconnected);
+            socket.remote() = {}; // didn't connect
+            socket.state(State::Closed);
         } else if((events & PollEvents::Write)) {
-            socket.state(SocketState::Connected);
+            socket.state(State::Open);
         }
         socket.poll().del(PollEvents::Write);   
         notify(ec); // they could start read/write, etc
@@ -69,33 +73,39 @@ class SocketConnect : public CompletionSlot<std::error_code> {
     }
 };
 
-template<typename SockT>
-class BasicStreamSocket : public BasicSocket<SockT> {
-    using This = BasicStreamSocket<SockT>;
-    using Base = BasicSocket<SockT>;
+template<typename SockT, typename StateT>
+class BasicStreamSocket : public BasicSocket<
+    BasicStreamSocket<SockT, StateT>,
+    SockT, StateT> 
+{
+    using This = BasicStreamSocket<SockT, StateT>;
+    using Base = BasicSocket<This, SockT, StateT>;
 public:
     using typename Base::PollHandle;
     using typename Base::Endpoint;
+    using typename Base::Protocol;
+    using typename Base::State;
 public:
     using Base::Base;
 
     using Base::state, Base::poll;
-    using Base::read, Base::write, Base::recv;
+    using Base::read, Base::write;
 
     template<typename HandlerT>
     void async_connect(const Endpoint& ep, HandlerT&& handler) {
         async_connect(ep, util::bind<HandlerT>());
     }
-    void async_connect(const Endpoint& ep, Slot<std::error_code> slot) {
-        state(SocketState::Connecting);
 
+    void async_connect(const Endpoint& ep, Slot<std::error_code> slot) {
+        state(State::Connecting);
         if(!conn_.prepare(*this, ep, slot)) {
             poll().mod(conn_slot());            // async
         } else {
             poll().mod(io_slot());              // sync
         }
     }
-    
+    Endpoint& remote() { return remote_; }
+    const Endpoint& remote() const { return remote_; }
   protected:
     friend Base;
     using Base::io_slot, Base::on_io_event;
@@ -108,9 +118,10 @@ public:
     }
 protected:
     SocketConnect<This> conn_;
+    Endpoint remote_ {};   // what we connect to
 };
 
-using StreamSocket = BasicStreamSocket<StreamSockClnt>;
+using StreamSocket = BasicStreamSocket<StreamSockClnt, io::SocketState>;
 
 } // namespace net
 } // namespace toolbox

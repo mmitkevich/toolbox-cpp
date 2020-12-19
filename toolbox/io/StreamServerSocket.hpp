@@ -38,10 +38,10 @@ class SocketAccept : public CompletionSlot<ClientSocketT&&, std::error_code> {
     using Socket = SocketT;
     using ClientSocket = ClientSocketT;
     using Endpoint=typename Socket::Endpoint;
-    using typename Base::Slot;
+    using typename Base::SlotImpl;
     using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot, Base::reset;
 
-    bool prepare(Socket& socket, const Endpoint& ep, Slot slot) {
+    bool prepare(Socket& socket, SlotImpl slot, Endpoint* ep) {
         if(*this) {
             throw std::system_error { make_error_code(std::errc::operation_in_progress), "accept" };
         }
@@ -53,7 +53,7 @@ class SocketAccept : public CompletionSlot<ClientSocketT&&, std::error_code> {
     bool complete(Socket& socket, PollEvents events) {
         if(events & PollEvents::Read) {
             std::error_code ec {};
-            auto sock = socket.accept(endpoint_, ec);
+            auto sock = socket.accept(*endpoint_, ec);
             socket.poll().del(PollEvents::Read);
             ClientSocket client {socket};
             notify(std::move(client), ec);
@@ -62,19 +62,22 @@ class SocketAccept : public CompletionSlot<ClientSocketT&&, std::error_code> {
         return false;
     }
 protected:
-    Endpoint endpoint_;
+    Endpoint *endpoint_{};
 };
 
 /// adds listen and accept
-template<typename SockT, typename SockClntT>
-class BasicServerSocket : public BasicSocket<SockT> {
-    using This = BasicServerSocket<SockT, SockClntT>;
-    using Base = BasicSocket<SockT>;
+template<typename SockT, typename SockClntT, typename StateT>
+class BasicStreamServerSocket : public BasicSocket<
+    BasicStreamServerSocket<SockT, SockClntT, StateT>, 
+    SockT, StateT>
+{
+    using This = BasicStreamServerSocket<SockT, SockClntT, StateT>;
+    using Base = BasicSocket<This, SockT, StateT>;
 public:
     using typename Base::PollHandle;
     using typename Base::Protocol;
     using typename Base::Endpoint;
-    using ClientSocket = BasicStreamSocket<SockClntT>;
+    using ClientSocket = BasicStreamSocket<SockClntT, StateT>;
     using AcceptOp = SocketAccept<This, ClientSocket>;
 public:
     using Base::Base;
@@ -91,8 +94,8 @@ public:
         state(SocketState::Listening);
         sock().listen(backlog);
     }
-    void accept(Slot<ClientSocket&&, std::error_code> slot) {
-        accept_.prepare(*this, slot);
+    void accept(Endpoint& ep, Slot<ClientSocket&&, std::error_code> slot) {
+        accept_.prepare(*this, slot, &ep);
     }
 protected:
     void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
@@ -104,9 +107,9 @@ protected:
     AcceptOp accept_;
 };
 
-template<typename SockT, typename SockClntT>
-class SockOpen<BasicServerSocket<SockT, SockClntT>> {
-    using Socket = BasicServerSocket<SockT, SockClntT>;
+template<typename SockT, typename SockClntT, typename StateT>
+class SockOpen<BasicStreamServerSocket<SockT, SockClntT, StateT>> {
+    using Socket = BasicStreamServerSocket<SockT, SockClntT, StateT>;
   public:
     void prepare(Socket& socket) {
         socket.set_non_block();
@@ -117,7 +120,7 @@ class SockOpen<BasicServerSocket<SockT, SockClntT>> {
     }
 };
 
-using ServerSocket = BasicServerSocket<StreamSockServ, StreamSockClnt>;
+using StreamServerSocket = BasicStreamServerSocket<net::StreamSockServ, net::StreamSockClnt, io::SocketState>;
 
 } // namespace net
 } // namespace toolbox

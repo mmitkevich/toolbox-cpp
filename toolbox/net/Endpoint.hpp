@@ -166,9 +166,18 @@ TOOLBOX_API std::ostream& operator<<(std::ostream& os, const addrinfo& ai);
 namespace std {
     template<typename ProtocolT>
     struct hash<toolbox::BasicIpEndpoint<ProtocolT>> {
-        std::size_t operator()(toolbox::BasicIpEndpoint<ProtocolT> self) const {
+        std::size_t operator()(toolbox::BasicIpEndpoint<ProtocolT> const& self) const {
             std::string_view sv((char*)self.data(), self.size());//*sizeof(typename toolbox::BasicIpEndpoint<ProtocolT>::data_type)
             return std::hash<std::string_view>{}(sv);
+        }
+    };
+
+    template<>
+    struct hash<toolbox::McastEndpoint> {
+        std::size_t operator()(toolbox::McastEndpoint const& self) const {
+            std::string_view sv((char*)self.data(), self.size());//*sizeof(typename toolbox::BasicIpEndpoint<ProtocolT>::data_type)
+            return std::hash<std::string_view>{}(sv)
+                ^ std::hash<std::string>{}(self.interface());
         }
     };
 }

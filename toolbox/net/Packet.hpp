@@ -17,9 +17,11 @@ public:
     PacketHeader(Endpoint src, Endpoint dst, WallTime recv_ts)
     : src_(src), dst_(dst), recv_ts_(recv_ts) {}
     
+    Endpoint& src() { return src_; }
     const Endpoint& src() const { return src_; }
     void src(const Endpoint& val) { src_ = val; }
 
+    Endpoint& dst() { return dst_; }
     const Endpoint& dst() const { return dst_; }
     void dst(const Endpoint& val) { dst_ = val; }
 

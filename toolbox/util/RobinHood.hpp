@@ -43,6 +43,13 @@ template <typename KeyT, typename ValueT, typename HashT = RobinHash<KeyT>,
 using RobinFlatMap
     = robin_hood::unordered_flat_map<KeyT, ValueT, HashT, KeyEqualT, MaxLoadFactor100N>;
 
+struct no_value {};
+
+// default alias
+template <typename KeyT, typename ValueT, typename HashT = RobinHash<KeyT>,
+          typename KeyEqualT = std::equal_to<KeyT>, std::size_t MaxLoadFactor100N = 80>
+using unordered_map = RobinFlatMap<KeyT, ValueT, HashT, KeyEqualT, MaxLoadFactor100N>;
+
 /// Robin Hood unordered node map.
 template <typename KeyT, typename ValueT, typename HashT = RobinHash<KeyT>,
           typename KeyEqualT = std::equal_to<KeyT>, std::size_t MaxLoadFactor100N = 80>

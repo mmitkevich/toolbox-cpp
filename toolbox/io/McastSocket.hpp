@@ -31,10 +31,13 @@ namespace toolbox {
 inline namespace io {
 
 
-template<typename SockT>
-class BasicMcastSocket : public BasicSocket<SockT> {
-    using This = BasicMcastSocket<SockT>;
-    using Base = BasicSocket<SockT>;
+template<typename SockT, typename StateT>
+class BasicMcastSocket : public BasicSocket<
+  BasicMcastSocket<SockT, StateT>
+  , SockT, StateT>
+{
+    using This = BasicMcastSocket<SockT, StateT>;
+    using Base = BasicSocket<This, SockT, StateT>;
   public:
     using typename Base::Sock, typename Base::PollHandle;
     using typename Base::Protocol, typename Base::Endpoint;
@@ -43,29 +46,17 @@ class BasicMcastSocket : public BasicSocket<SockT> {
     using Base::poll;
     using Base::open, Base::bind;
     using Base::read, Base::write, Base::recv; 
+    using Base::connect, Base::disconnect;
+    using Base::leave_group, Base::join_group;
 
-    template<typename AddrT, typename IfaceT>
-    void join_group(const AddrT& addr, IfaceT iface) {
-      Base::join_group(addr, std::forward<IfaceT>(iface));
-    }
-    template<typename AddrT, typename IfaceT>
-    void leave_group(const AddrT& addr, IfaceT iface) {
-      Base::leave_group(addr, std::forward<IfaceT>(iface));
-    }
-    void connect(const Endpoint& ep) {
-      Base::connect(ep);
-    }
-    void disconnect(const Endpoint& ep) {
-      Base::disconnect(ep);
-    }
     void async_connect(const Endpoint& ep, util::Slot<std::error_code> slot) {
       std::error_code ec {};
-      Base::connect(ep, ec);
+      connect(ep, ec);
       slot(ec);
     }
 };
 
-using McastSocket = BasicMcastSocket<McastSock>;
+using McastSocket = BasicMcastSocket<McastSock, io::SocketState>;
 
 } // namespace net
 } // namespace toolbox

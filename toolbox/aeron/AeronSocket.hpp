@@ -31,10 +31,10 @@ public:
         AeronSub::close();
     }
 
-    void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
+    /*void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
         AeronSub::on_io_event(now, fd, events);
         AeronSub::on_io_event(now, fd, events);
-    }
+    }*/
 private:
     //AeronSub sub_;
 };

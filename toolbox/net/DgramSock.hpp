@@ -50,17 +50,15 @@ struct DgramSock : IoSock {
     ssize_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep, std::error_code& ec) noexcept {
         return os::recvfrom(get(), buf, len, flags, ep, ec);
     }
-    std::size_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep) {
+    ssize_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep) {
         return os::recvfrom(get(), buf, len, flags, ep);
     }
-
     ssize_t recvfrom(MutableBuffer buf, int flags, Endpoint& ep, std::error_code& ec) noexcept {
         return os::recvfrom(get(), buf, flags, ep, ec);
     }
     std::size_t recvfrom(MutableBuffer buf, int flags, Endpoint& ep) {
         return os::recvfrom(get(), buf, flags, ep);
     }
-
     ssize_t sendto(const void* buf, std::size_t len, int flags, const Endpoint& ep,
                    std::error_code& ec) noexcept {
         return os::sendto(get(), buf, len, flags, ep, ec);

@@ -41,7 +41,7 @@ inline IpAddr ip_address(const struct sockaddr *sa) {
         }
         case AF_INET6:
             assert(false);
-            return IpAddrV6{};  // FIXME
+            return IpAddrV6 {};  // FIXME
         default:
             assert(false);
             return IpAddr{};
@@ -147,7 +147,6 @@ inline std::string if_addrtoname(std::string_view addr) {
     ::freeifaddrs(addrs);
     return name;
 }
-
 
 } // namespace os
 } // namespace toolbox
