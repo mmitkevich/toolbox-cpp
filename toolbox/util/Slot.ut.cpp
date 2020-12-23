@@ -15,7 +15,7 @@
 // limitations under the License.
 
 #include "Slot.hpp"
-
+#include <iostream>
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
@@ -146,7 +146,7 @@ BOOST_AUTO_TEST_CASE(SlotRvalueFunCase)
     BOOST_TEST(x == 11);
 }
 
-BOOST_AUTO_TEST_CASE(SignalCase)
+BOOST_AUTO_TEST_CASE(SlotSignalCase)
 {
     Signal<int> sig;
     int x {2};
@@ -161,6 +161,18 @@ BOOST_AUTO_TEST_CASE(SignalCase)
     sig.disconnect(toolbox::bind(&fn1));
     sig(7);
     BOOST_TEST(x==2+5+3*6+2*7);
+}
+
+BOOST_AUTO_TEST_CASE(SlotContextCase)
+{
+    struct Subject {
+        int x{2};
+    };
+    Subject s;
+    Slot<int> slot = toolbox::bind(&s, [](Subject& s, int y) { s.x = y;});
+    slot(5);
+    BOOST_TEST(s.x==5);
+    std::cout<<s.x;
 }
 
 BOOST_AUTO_TEST_SUITE_END()

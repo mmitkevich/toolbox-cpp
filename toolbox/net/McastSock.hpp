@@ -276,6 +276,7 @@ struct McastSock : DgramSock {
     }
     // Mcast disconnect is leave_group
     void disconnect(const Endpoint& ep, std::error_code& ec) noexcept {
+        assert(!empty());
         if(!ep.interface().empty()) {
             auto iface = os::if_addrtoname(ep.interface());
             leave_group(ep.address(), iface.c_str(), ec);
@@ -284,6 +285,7 @@ struct McastSock : DgramSock {
         }
     }
     void disconnect(const Endpoint& ep) { 
+        assert(!empty());
         if(!ep.interface().empty()) {
             auto iface = os::if_addrtoname(ep.interface());
             leave_group(ep.address(), ep.interface().c_str());

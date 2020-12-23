@@ -18,6 +18,7 @@
 #define TOOLBOX_NET_SOCKET_HPP
 
 #include "toolbox/net/IpAddr.hpp"
+#include "toolbox/util/Slot.hpp"
 #include <sstream>
 #include <toolbox/net/Error.hpp>
 
@@ -813,6 +814,12 @@ struct SocketTraits {
     using sock_connect_t = decltype(std::declval<SockT&>().connect(std::declval<typename SockT::Endpoint const &>()));
     template<typename SockT>
     constexpr static  bool has_connect = boost::is_detected_v<sock_connect_t, SockT>;
+
+    template<typename SockT>
+    using sock_async_connect_t = decltype(std::declval<SockT&>().async_connect(std::declval<typename SockT::Endpoint const &>(),
+        std::declval<typename SockT::Endpoint const&>(), std::declval<util::Slot<std::error_code>>));
+    template<typename SockT>
+    constexpr static  bool has_async_connect = boost::is_detected_v<sock_async_connect_t, SockT>;
     
     template<typename SockT>
     using sock_accept_t = decltype(std::declval<SockT&>().accept(std::declval<typename SockT::Endpoint const&>()));    

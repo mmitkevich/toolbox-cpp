@@ -22,6 +22,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
+#include <string_view>
 
 namespace toolbox {
 inline namespace net {
@@ -112,6 +113,7 @@ struct UdpProtocol {
     constexpr int type() const noexcept { return SOCK_DGRAM; }
     constexpr int protocol() const noexcept { return IPPROTO_UDP; }
 
+    static constexpr std::string_view name = "udp";
   private:
     constexpr explicit UdpProtocol(int family) noexcept
     : family_{family}
@@ -127,6 +129,8 @@ struct TcpProtocol {
 
     static constexpr auto v4() noexcept { return TcpProtocol{AF_INET}; }
     static constexpr auto v6() noexcept { return TcpProtocol{AF_INET6}; }
+
+    static constexpr std::string_view name = "tcp";
 
     constexpr int family() const noexcept { return family_; }
     constexpr int type() const noexcept { return SOCK_STREAM; }
@@ -146,12 +150,16 @@ struct UnixDgramProtocol {
     constexpr int family() const noexcept { return AF_UNIX; }
     constexpr int type() const noexcept { return SOCK_DGRAM; }
     constexpr int protocol() const noexcept { return 0; }
+    
+    static constexpr std::string_view name = "unix_dgram";
 };
 
 struct UnixStreamProtocol {
     constexpr int family() const noexcept { return AF_UNIX; }
     constexpr int type() const noexcept { return SOCK_STREAM; }
     constexpr int protocol() const noexcept { return 0; }
+    
+    static constexpr std::string_view name = "unix_pipe";
 };
 
 struct McastProtocol {
@@ -164,6 +172,8 @@ struct McastProtocol {
     constexpr int family() const noexcept { return family_; }
     constexpr int type() const noexcept { return SOCK_DGRAM; }
     constexpr int protocol() const noexcept { return IPPROTO_UDP; }
+
+    static constexpr std::string_view name = "mcast";
 
   private:
     constexpr explicit McastProtocol(int family) noexcept

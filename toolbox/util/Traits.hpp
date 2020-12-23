@@ -28,6 +28,7 @@ struct FunctionTraits : FunctionTraits<decltype(&TypeT::operator())> {
 };
 
 /// Specialisation for free functions.
+
 template <typename ReturnT, typename... ArgsT>
 struct FunctionTraits<ReturnT (*)(ArgsT...)> {
 
@@ -43,6 +44,19 @@ struct FunctionTraits<ReturnT (*)(ArgsT...)> {
     // Apply parameter pack to template.
     template <template <typename...> typename TemplT>
     using Pack = TemplT<ArgsT...>;
+
+    template<template <typename...> typename TemplT, int I>
+    struct Tail1 {
+        template<typename FirstT, typename...RestsT>
+        using TypeTT = TemplT<RestsT...>;
+    };
+    template<template <typename...> typename TemplT>
+    struct Tail1<TemplT, 0> {
+        template<typename ...RestsT>
+        using TypeTT = TemplT<RestsT...>;
+    };
+    template <template <typename...> typename TemplT>
+    using Pack1 = typename Tail1<TemplT, sizeof...(ArgsT)>::template TypeTT<ArgsT...>;
 };
 
 /// Specialisation for noexcept free functions.

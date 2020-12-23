@@ -15,6 +15,7 @@
 // limitations under the License.
 #pragma once
 
+#include "toolbox/util/RobinHood.hpp"
 #ifndef TOOLBOX_UTIL_SLOT_HPP
 #define TOOLBOX_UTIL_SLOT_HPP
 
@@ -29,6 +30,11 @@
 namespace toolbox {
 inline namespace util {
 
+struct SlotData {
+    void* obj {nullptr};
+    void (*fn)(...) {nullptr};
+};
+
 template <typename... ArgsT>
 class BasicSlot {
   public:
@@ -42,6 +48,15 @@ class BasicSlot {
     }
     constexpr BasicSlot(std::nullptr_t = nullptr) noexcept {}
     ~BasicSlot() = default;
+
+    BasicSlot(const SlotData& rhs) noexcept {
+        obj_ = rhs.obj;
+        fn_ = reinterpret_cast<void (*)(void*, ArgsT...)>(rhs.fn);
+    }
+    
+    operator SlotData&() {
+        return *reinterpret_cast<SlotData*>(this);
+    }
 
     // Copy.
     constexpr BasicSlot(const BasicSlot&) noexcept = default;
@@ -81,6 +96,21 @@ class BasicSlot {
         };
         return *this;
     }
+    // stateless lambdas + pointer context
+    template <typename ClassT, typename LambdaFnT>
+    constexpr auto& bind(ClassT* obj, LambdaFnT&& fn) noexcept
+    {
+        //https://stackoverflow.com/questions/37481767/why-does-a-lambda-have-a-size-of-1-byte
+        static_assert(sizeof(LambdaFnT)==1,"can only bind to stateless lambdas, [](...){...}"); 
+        obj_ = obj;
+
+        fn_ = [](void* obj, ArgsT... args) {
+            void (LambdaFnT::*ptr)(ClassT&, ArgsT...) const = &LambdaFnT::operator();
+            (static_cast<LambdaFnT*>(nullptr)->*ptr)(*static_cast<ClassT*>(obj), std::forward<ArgsT>(args)...);
+        };
+        return *this;
+    }
+
     // Member function.
     template <auto MemFnT, typename ClassT = typename FunctionTraits<decltype(MemFnT)>::ClassType>
     constexpr auto& bind(ClassT* obj) noexcept
@@ -121,6 +151,14 @@ constexpr auto bind() noexcept
     using Traits = FunctionTraits<decltype(FnT)>;
     using Slot = typename Traits::template Pack<BasicSlot>;
     return Slot{}.template bind<FnT>();
+}
+
+template <typename ClassT, typename LambdaFnT>
+constexpr auto bind( ClassT* obj, LambdaFnT&& fn) noexcept
+{
+    using Traits = FunctionTraits<std::decay_t<LambdaFnT>>;
+    using Slot = typename Traits::template Pack1<BasicSlot>;
+    return Slot{}.template bind<ClassT, LambdaFnT>(obj, std::move(fn));
 }
 
 template <typename ClassT>
@@ -165,6 +203,7 @@ public:
     bool connect(Slot slot) {
         auto it = std::find(slots_.begin(), slots_.end(), slot);
         if(it==slots_.end()) {
+            // FIXME: when full, do gc
             slots_.emplace_back(slot);
             return true;
         }
@@ -191,6 +230,15 @@ public:
             slot(std::forward<ArgsT>(args)...);
         }
     }
+    
+    /// one-shot notify. removes slot after calling
+    void notify(ArgsT... args) const {
+        for(auto& slot: slots_) {
+            slot(std::forward<ArgsT>(args)...);
+            slot.reset();
+        }
+    }
+
     constexpr bool empty() const noexcept { return slots_.empty(); }
     constexpr explicit operator bool() const noexcept { return !slots_.empty(); }
 private:
@@ -199,6 +247,62 @@ private:
 
 template<typename...Args>
 using Signal = BasicSignal<16, Args...>;
+
+template<typename KeyT, typename...ArgsT>
+class SignalMap {
+public:
+    using Slot = util::Slot<ArgsT...>;
+    using Key = KeyT;
+    using key_type = Key;
+    using value_type = Slot;
+
+    bool empty(Key key) {
+        return data_.find(key)==data_.end();
+    }
+
+    bool emplace(Key key, Slot slot) {
+        auto it = data_.emplace(key, slot);
+        return it.second;
+    }
+
+    bool erase(Key key) {
+        auto it = data_.find(key);
+        if(it!=data_.end()) {
+            data_.erase(it);
+            return true;
+        }
+        return false;
+    }
+
+    void operator()(Key key, ArgsT... args) {
+        auto it = data_.find(key);
+        if(it!=data_.end()) {
+            it->second(std::forward<ArgsT...>(args)...);
+        }
+    }
+    
+    void invoke(Key key, ArgsT... args) {
+        auto it = data_.find(key);
+        if(it!=data_.end()) {
+            it->second.invoke(std::forward<ArgsT...>(args)...);
+        }
+    }
+
+    void notify(Key key, ArgsT... args) {
+        auto it = data_.find(key);
+        if(it!=data_.end()) {
+            auto slot = it->second;
+            data_.erase(it);
+            slot.invoke(std::forward<ArgsT...>(args)...);
+        }
+    }
+
+    Slot& operator[](Key key) {
+        return data_[key];
+    }
+protected:
+    util::RobinFlatMap<KeyT, util::Slot<ArgsT...>> data_;
+};
 
 using DoneSlot = Slot<std::error_code>;
 using SizeSlot = Slot<ssize_t, std::error_code>;

@@ -6,15 +6,15 @@
 namespace toolbox { inline namespace net {
 
 template<typename EndpointT>
-class PacketHeader {
+class BasicPacketHeader {
 public:
     using Endpoint = EndpointT;
 public:
-    PacketHeader()
+    BasicPacketHeader()
     {}
-    PacketHeader(Endpoint src, Endpoint dst)
+    BasicPacketHeader(Endpoint src, Endpoint dst)
     : src_(src), dst_(dst) {}
-    PacketHeader(Endpoint src, Endpoint dst, WallTime recv_ts)
+    BasicPacketHeader(Endpoint src, Endpoint dst, WallTime recv_ts)
     : src_(src), dst_(dst), recv_ts_(recv_ts) {}
     
     Endpoint& src() { return src_; }
@@ -29,7 +29,7 @@ public:
     const WallTime& recv_timestamp() const { return recv_ts_;}
     void recv_timestamp(const WallTime& val) { recv_ts_ = val;}
     
-    friend std::ostream& operator<<(std::ostream& os, const PacketHeader& self) {
+    friend std::ostream& operator<<(std::ostream& os, const BasicPacketHeader& self) {
         return os << "src:'"<<self.src() << "'"
            << ",dst:'"<<self.dst() << "',"
            << ",recv_ts:'"<<self.recv_timestamp()<<"'";
@@ -43,20 +43,20 @@ protected:
 /// Packet = Header + Buffer
 /// Buffer = ConstBuffer | MutableBuffer
 template<typename HeaderT, typename BufferT>
-class Packet {
+class BasicPacket {
 public:
     using Header = HeaderT;
     using Buffer = BufferT;
 public:
-    constexpr Packet() = default;
-    constexpr Packet(Header&& header, Buffer&& buffer)
+    constexpr BasicPacket() = default;
+    constexpr BasicPacket(Header&& header, Buffer&& buffer)
     : header_(header)
     , buffer_(buffer)
     {}
-    explicit constexpr Packet(Header&& header)
+    explicit constexpr BasicPacket(Header&& header)
     : header_(header)
     {}
-    explicit constexpr Packet(Buffer&& buffer)
+    explicit constexpr BasicPacket(Buffer&& buffer)
     : buffer_(buffer)
     {}  
     // Header
@@ -73,6 +73,12 @@ protected:
     HeaderT header_;
     BufferT buffer_;
 };
+
+template<typename EndpointT, typename BufferT=ConstBuffer>
+using Packet = BasicPacket<BasicPacketHeader<EndpointT>, BufferT>;
+
+using UdpPacket = Packet<UdpEndpoint>;
+using McastPacket = Packet<McastEndpoint>;
 
 /// Typed packet view over arbitrary Packet
 template<typename ValueT, typename PacketImplT>

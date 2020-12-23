@@ -225,7 +225,6 @@ public:
     explicit BasicSocket(ReactorT& r)
     : poll_(r.poll(get()))
     {
-        open_.prepare(*impl());
     }
 
     template<typename ReactorT>
@@ -282,6 +281,12 @@ public:
         poll_.reset();
         Base::close();        
     }
+
+    /// returns false if we already reading
+    bool can_read() const { return read_.empty(); }
+    
+    /// returns false if we already writing
+    bool can_write() const { return write_.empty(); }
 
     void async_read(MutableBuffer buffer, Slot<ssize_t, std::error_code> slot) {
         read_.flags(0);
