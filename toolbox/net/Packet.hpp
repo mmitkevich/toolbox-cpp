@@ -42,14 +42,14 @@ protected:
 
 /// Packet = Header + Buffer
 /// Buffer = ConstBuffer | MutableBuffer
-template<typename HeaderT, typename BufferT>
+template<typename BufferT, typename HeaderT>
 class BasicPacket {
 public:
     using Header = HeaderT;
     using Buffer = BufferT;
 public:
     constexpr BasicPacket() = default;
-    constexpr BasicPacket(Header&& header, Buffer&& buffer)
+    constexpr BasicPacket(Buffer&& buffer, Header&& header)
     : header_(header)
     , buffer_(buffer)
     {}
@@ -74,11 +74,11 @@ protected:
     BufferT buffer_;
 };
 
-template<typename EndpointT, typename BufferT=ConstBuffer>
-using Packet = BasicPacket<BasicPacketHeader<EndpointT>, BufferT>;
+template<typename BufferT, typename EndpointT>
+using Packet = BasicPacket<BufferT, BasicPacketHeader<EndpointT>>;
 
-using UdpPacket = Packet<UdpEndpoint>;
-using McastPacket = Packet<McastEndpoint>;
+using UdpPacket = Packet<ConstBuffer, UdpEndpoint>;
+using McastPacket = Packet<ConstBuffer, McastEndpoint>;
 
 /// Typed packet view over arbitrary Packet
 template<typename ValueT, typename PacketImplT>

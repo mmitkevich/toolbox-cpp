@@ -28,8 +28,7 @@
 #include <toolbox/io/Socket.hpp>
 
 namespace toolbox {
-inline namespace net {
-
+inline namespace io {
 
 template<typename SocketT>
 class SocketConnect : public CompletionSlot<std::error_code> {
@@ -38,10 +37,10 @@ class SocketConnect : public CompletionSlot<std::error_code> {
     using Socket=SocketT;
     using Endpoint=typename Socket::Endpoint;
     using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot, Base::reset;
-    using typename Base::SlotImpl;
+    using typename Base::Slot;
     using State = typename SocketT::State;
 
-    bool prepare(Socket& socket, const Endpoint& ep, SlotImpl slot) {
+    bool prepare(Socket& socket, const Endpoint& ep, Slot slot) {
         if(*this) {
             throw std::system_error { make_error_code(std::errc::operation_in_progress), "connect" };
         }
@@ -123,7 +122,100 @@ protected:
 
 using StreamSocket = BasicStreamSocket<StreamSockClnt, io::SocketState>;
 
-} // namespace net
+
+
+template<typename SocketT, typename ClientSocketT>
+class SocketAccept : public CompletionSlot<ClientSocketT&&, std::error_code> {
+    using Base = CompletionSlot<std::error_code>;
+  public:
+    using Socket = SocketT;
+    using ClientSocket = ClientSocketT;
+    using Endpoint=typename Socket::Endpoint;
+    using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot, Base::reset;
+    using typename Base::Slot;
+
+    bool prepare(Socket& socket, Slot slot, Endpoint* ep) {
+        if(*this) {
+            throw std::system_error { make_error_code(std::errc::operation_in_progress), "accept" };
+        }
+        endpoint_ = ep;
+        set_slot(slot);
+        socket.poll().add(PollEvents::Read);
+        return true;
+    }
+    bool complete(Socket& socket, PollEvents events) {
+        if(events & PollEvents::Read) {
+            std::error_code ec {};
+            auto sock = socket.accept(*endpoint_, ec);
+            socket.poll().del(PollEvents::Read);
+            ClientSocket client {socket};
+            notify(std::move(client), ec);
+            return true;
+        }
+        return false;
+    }
+protected:
+    Endpoint *endpoint_{};
+};
+
+/// adds listen and accept
+template<typename SockT, typename SockClntT, typename StateT>
+class BasicStreamServerSocket : public BasicSocket<
+    BasicStreamServerSocket<SockT, SockClntT, StateT>, 
+    SockT, StateT>
+{
+    using This = BasicStreamServerSocket<SockT, SockClntT, StateT>;
+    using Base = BasicSocket<This, SockT, StateT>;
+public:
+    using typename Base::PollHandle;
+    using typename Base::Protocol;
+    using typename Base::Endpoint;
+    using ClientSocket = BasicStreamSocket<SockClntT, StateT>;
+    using AcceptOp = SocketAccept<This, ClientSocket>;
+public:
+    using Base::Base;
+    using Base::poll, Base::sock, Base::state;
+    using Base::read, Base::write, Base::recv;
+    
+    PollHandle poll(SockClntT& sock) {
+        PollHandle p = poll();
+        p.fd(sock.get());
+        return p;
+    }
+
+    void listen(int backlog=0) { 
+        state(SocketState::Listening);
+        sock().listen(backlog);
+    }
+    void async_accept(Endpoint& ep, Slot<ClientSocket&&, std::error_code> slot) {
+        accept_.prepare(*this, slot, &ep);
+    }
+protected:
+    void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
+        if(accept_) {
+            accept_.complete(poll(), sock());
+        }
+    }  
+protected:
+    AcceptOp accept_;
+};
+
+template<typename SockT, typename SockClntT, typename StateT>
+class SockOpen<BasicStreamServerSocket<SockT, SockClntT, StateT>> {
+    using Socket = BasicStreamServerSocket<SockT, SockClntT, StateT>;
+  public:
+    void prepare(Socket& socket) {
+        socket.set_non_block();
+        if (socket.is_ip_family()) {
+            set_tcp_no_delay(socket.get(), true);
+        }
+        socket.set_reuse_addr(true);
+    }
+};
+
+using StreamServerSocket = BasicStreamServerSocket<net::StreamSockServ, net::StreamSockClnt, io::SocketState>;
+
+} // namespace io
 } // namespace toolbox
 
 

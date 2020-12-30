@@ -28,14 +28,14 @@ namespace toolbox {
 inline namespace io {
 
 
-template<typename RunnableT>
-inline void run_thread(RunnableT& r, ThreadConfig config)
+template<typename CallableT>
+inline void run_thread(CallableT& r, ThreadConfig config)
 {
     sig_block_all();
     try {
         set_thread_attrs(config);
         TOOLBOX_NOTICE << "started " << config.name << " thread";
-        r.run();
+        r();
     } catch (const std::exception& e) {
         TOOLBOX_CRIT << "exception: " << e.what();
         kill(getpid(), SIGTERM);
@@ -43,13 +43,14 @@ inline void run_thread(RunnableT& r, ThreadConfig config)
     TOOLBOX_NOTICE << "stopping " << config.name << " thread";
 }
 
-template<class ReactorT>
+template<class ReactorT, class InitFn>
 class TOOLBOX_API BasicRunner {
   public:
     /// Start new thread and run
-    BasicRunner(ReactorT& r, ThreadConfig config = std::string{"reactor"})
+    BasicRunner(ReactorT& r, InitFn &&init, ThreadConfig config = std::string{"reactor"})
     : reactor_{r}
-    , thread_{run_thread<ReactorT>, std::ref(r), config}
+    , init_{init}
+    , thread_{run_thread<BasicRunner<ReactorT, InitFn>>, std::ref(*this), config}
     { }
 
     ~BasicRunner() {
@@ -58,6 +59,10 @@ class TOOLBOX_API BasicRunner {
         thread_.join();
     }
 
+    void operator()() {
+        init_();
+        reactor_.run();
+    }
     // Copy.
     BasicRunner(const BasicRunner&) = delete;
     BasicRunner& operator=(const BasicRunner&) = delete;
@@ -68,6 +73,7 @@ class TOOLBOX_API BasicRunner {
 
   private:
     ReactorT& reactor_;
+    InitFn init_;
     std::thread thread_;
 };
 

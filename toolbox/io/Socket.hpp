@@ -22,22 +22,37 @@ enum class SocketState {
 };
 
 template<typename...ArgsT>
-class CompletionSlot {
-public:    
-    using SlotImpl = util::Slot<ArgsT...>;
+class CompletionSlot : public util::Slot<ArgsT...> {
 public:
+    using Slot = util::Slot<ArgsT...>;
+
+    using Slot::empty, Slot::operator bool, Slot::reset;
+    /// fire and reset
     void notify(ArgsT... args) { 
-        auto s = slot_;
+        auto s = *this;
         reset();
-        s.invoke(std::forward<ArgsT>(args)...);
+        Slot::invoke(std::forward<ArgsT>(args)...);
     }
-    explicit operator bool() {return !empty(); }
-    bool empty() const { return slot_.empty(); }
-    void reset() { slot_.reset(); }
-    explicit operator bool() const { return (bool)slot_; }
-    void set_slot(SlotImpl val) { slot_ = val; }
+    void set_slot(Slot val) { 
+        assert(!val.empty());
+        *static_cast<Slot*>(this) = val;
+    }
+    Slot get_slot() const { return *this; }
+};
+
+template<typename...ArgsT>
+class PendingSlot : public CompletionSlot<ArgsT...> {
+    using Base = CompletionSlot<ArgsT...>;
+public:
+    int& pending() { return pending_; }
+    int pending() const { return pending_; }
+    bool ready() const { return pending_==0; }
+    void operator()(ArgsT...args) {
+        if(ready())
+            Base::operator()(std::forward<ArgsT>(args)...);
+    }
 protected:
-    SlotImpl slot_ {};
+    int pending_ {};
 };
 
 template<typename SockT>
@@ -62,12 +77,12 @@ class SocketRead : public CompletionSlot<ssize_t, std::error_code> {
   public:
     using Socket = SocketT;
     using Endpoint = EndpointT;
-    using typename Base::SlotImpl;
-    using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot;
+    using typename Base::Slot;
+    using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot, Base::get_slot;
 
     void flags(int val) { flags_ = val; }
     void endpoint(Endpoint* ep) { endpoint_ = ep; }
-    bool prepare(Socket& socket, SlotImpl slot, MutableBuffer buf) {
+    bool prepare(Socket& socket, Slot slot, MutableBuffer buf) {
         if(*this) {
             throw std::system_error { make_error_code(std::errc::operation_in_progress), "read" };
         }
@@ -79,7 +94,7 @@ class SocketRead : public CompletionSlot<ssize_t, std::error_code> {
     }
     
     void notify(ssize_t size, std::error_code ec) { 
-        auto s = slot_;
+        auto s = get_slot();
         reset();
         s.invoke(size, ec);
     }
@@ -124,14 +139,14 @@ class SocketWrite : public CompletionSlot<ssize_t, std::error_code> {
     using Socket = SocketT;
 
     using Endpoint = EndpointT;
-    using typename Base::SlotImpl;
+    using typename Base::Slot;
 
     using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot;
 
     void flags(int val) { flags_ = val; }
     void endpoint(const Endpoint* ep) { endpoint_ = ep; }
 
-    bool prepare(Socket& socket, SlotImpl slot, ConstBuffer data) {
+    bool prepare(Socket& socket, Slot slot, ConstBuffer data) {
         if(*this) {
             throw std::system_error { make_error_code(std::errc::operation_in_progress), "write" };
         }
@@ -141,7 +156,7 @@ class SocketWrite : public CompletionSlot<ssize_t, std::error_code> {
         return false; // async
     }
     // zero copy
-    bool prepare(Socket& socket, SlotImpl slot, std::size_t size, util::Slot<void*, std::size_t> mut) {
+    bool prepare(Socket& socket, Slot slot, std::size_t size, util::Slot<void*, std::size_t> mut) {
          if(*this) {
             throw std::system_error { make_error_code(std::errc::operation_in_progress), "write" };
         }
@@ -151,11 +166,12 @@ class SocketWrite : public CompletionSlot<ssize_t, std::error_code> {
         socket.poll().add(PollEvents::Write);
         return false;
     }
-    void set_mut(Slot<void*, std::size_t> mut) {
+    void set_mut(util::Slot<void*, std::size_t> mut) {
         mut_ = mut;
     }
     void notify(ssize_t size, std::error_code ec) { 
-        auto s = slot_;
+        // redefine to use This::reset
+        auto s = *static_cast<Base*>(this);
         reset();
         s.invoke(size, ec);
     }
@@ -204,22 +220,41 @@ public:
     }
 };
 
-template<typename SocketStateT>
-using BasicSocketStateSignal = Signal<SocketStateT, SocketStateT, std::error_code>;
+template<typename StateT>
+class BasicSocketState {
+public:
+    using State = StateT;
+    using StateSignal = Signal<State, State, std::error_code>;
+
+    State state() const { return state_; }
+
+    void state(State val) {
+        auto old = state_;
+        state_ = val; 
+        state_changed_(old, val, std::error_code{});
+    }
+    StateSignal state_changed() { return state_changed_; }
+protected:
+    State state_ {};    
+    StateSignal state_changed_ {};
+};
+
 
 template<typename DerivedT, typename SockT, typename StateT>
-class BasicSocket : public SockT {
+class BasicSocket : public SockT, public BasicSocketState<StateT> {
     using Base = SockT;
+    using SocketState = BasicSocketState<StateT>;
     using This = BasicSocket<DerivedT, SockT, StateT>;
 public:
-    using typename SockT::Protocol;
-    using typename SockT::Endpoint;
     using PollHandle = toolbox::PollHandle;
-    using State = StateT;
-    using StateSignal = io::BasicSocketStateSignal<State>;
+    using typename Base::Protocol;
+    using typename Base::Endpoint;
+    using typename SocketState::State;
 public:
     using Base::Base, Base::get;
     using Base::read, Base::write;
+    
+    BasicSocket()  = default;
 
     template<typename ReactorT>
     explicit BasicSocket(ReactorT& r)
@@ -236,38 +271,19 @@ public:
         io_slot(util::bind<&DerivedT::on_io_event>(impl()));
     }
 
-     BasicSocket() = default;
-
-    // Copy.
+    ~BasicSocket() {
+        close();
+    }
+    
+     // Copy.
     BasicSocket(const BasicSocket&) = delete;
     BasicSocket& operator=(const BasicSocket&) = delete;
 
     // Move.
     BasicSocket(BasicSocket&&)  = default;
-    BasicSocket& operator=(BasicSocket&&)  = default;
+    BasicSocket& operator=(BasicSocket&&)  = default;    
 
-    ~BasicSocket() {
-        close();
-    }
-    
     PollHandle& poll() { return poll_; }
-    
-    SocketState state() const { return state_; }
-
-    void state(SocketState val) {
-        auto old = state_;
-        state_ = val; 
-        state_changed_(old, val, std::error_code{});
-    }
-
-    StateSignal state_changed() { return state_changed_; }
-
-    Endpoint& local() { return local_; }
-
-    void bind(const Endpoint& ep) {
-        Base::bind(ep);
-        local_ = ep;        
-    }
 
     template<typename ReactorT>
     void open(ReactorT& r, Protocol protocol = {}) {
@@ -275,13 +291,13 @@ public:
         poll_ = r.poll(get());        
         open_.prepare(*impl());
         io_slot(util::bind<&DerivedT::on_io_event>(impl()));
-    }
+    }    
   
     void close() {
         poll_.reset();
         Base::close();        
     }
-
+    
     /// returns false if we already reading
     bool can_read() const { return read_.empty(); }
     
@@ -350,69 +366,55 @@ protected:
     }
 protected:
     IoSlot io_slot_ {};
-    PollHandle poll_;
     SocketRead<DerivedT,Endpoint> read_; // could be specialized
     SocketWrite<DerivedT,Endpoint> write_;
     SockOpen<DerivedT> open_;
     Buffer buf_;
-    State state_ {State::Closed};    
-    StateSignal state_changed_;
+    PollHandle poll_;    
     Endpoint local_;
+    Endpoint remote_;
 };
 
 
-/// socket with broadcast semantics
-template<typename SocketT>
-class MultiSocket {
-    using This = MultiSocket<SocketT>;
+template<typename SocketT, typename SocketPtrT=SocketT*>
+class SocketRef {
 public:
     using Endpoint = typename SocketT::Endpoint;
     using Protocol = typename SocketT::Protocol;
     using Socket = SocketT;
-
-    Socket& emplace_back(Socket&& socket) { return sockets_.emplace_back(std::move(socket));} 
-    Socket& back() { return sockets_.back();}
-    Socket& operator[](std::size_t index) { return sockets_[index]; }
-    std::size_t size() const { return sockets_.size(); }
-    auto begin() { return sockets_.begin(); }
-    auto end() { return sockets_.end(); }
-
-    void async_zc_write(std::size_t size, Slot<void*, std::size_t> mut, Slot<ssize_t, std::error_code> slot) {
-        if(sockets_.empty())
-            return;
-        assert(!write_);
-        write_.set_slot(slot);
-        done_ = 0;
-        for(int i=0;i<sockets_.size();i++) {
-            sockets_[i].async_zc_write(size, mut, util::bind<&This::on_write>(this));
-        }
-    }
-
-    void async_write(ConstBuffer buf, Slot<ssize_t, std::error_code> slot) {
-        if(sockets_.empty())
-            return;
-        assert(!write_);
-        write_.set_slot(slot);
-        done_ = 0;
-        for(int i=0;i<sockets_.size();i++) {
-            sockets_[i].async_write(buf, util::bind<&This::on_write>(this));
-        }
-    }
-    void on_write(ssize_t size, std::error_code ec) {
-        done_++;
-        if(done_>=sockets_.size()) { // everybody ready
-            write_.notify(size, ec);
-        }
-    }
-private:
-    std::vector<Socket> sockets_;
-    SocketWrite<This, Endpoint> write_;
-    int done_ {};
-};
-
-template<typename SocketT, typename EndpointT>
-class SocketWrite<MultiSocket<SocketT>, EndpointT> : public CompletionSlot<ssize_t, std::error_code> {
+    using type = Socket;
 public:
+    SocketRef() = default;
+
+    SocketRef(SocketPtrT&& socket)
+    : impl_(std::move(socket)) {}
+
+    template<typename ReactorT, typename ProtocolT>
+    void open(ReactorT& r, ProtocolT p){ impl_->open(r, p); }
+
+    template<typename EndpointT>
+    void bind(const EndpointT& ep) { impl_->bind(ep); }
+
+    template<typename...ArgsT>
+    void listen(ArgsT...args) { impl_->listen(std::forward<ArgsT>(args)...); }
+
+    template<typename...ArgsT>
+    void async_read(ArgsT... args) { impl_->async_read(std::forward<ArgsT>(args)...); }
+    
+    template<typename...ArgsT>
+    void async_write(ArgsT... args) { impl_->async_write(std::forward<ArgsT>(args)...); }
+
+    template<typename...ArgsT>
+    void async_connect(ArgsT... args) { impl_->async_connect(std::forward<ArgsT>(args)...); }
+
+    template<typename...ArgsT>
+    void async_accept(ArgsT... args) { impl_->async_accept(std::forward<ArgsT>(args)...); }
+
+    // does not owns so does not closes
+    void close() {}
+private:
+    SocketPtrT impl_{};
 };
+
 
 }}

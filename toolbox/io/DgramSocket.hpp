@@ -1,6 +1,7 @@
 #pragma once
 
 #include "toolbox/io/Socket.hpp"
+#include <functional>
 
 namespace toolbox { inline namespace io {
 
@@ -12,42 +13,31 @@ class BasicDgramSocket : public BasicSocket< BasicDgramSocket<SockT, StateT>, So
     using Base = BasicSocket<This, SockT, StateT>;
 public:
     using typename Base::Endpoint;
-    using ClientSocket = This;
-
+    using typename Base::Protocol;
+    using typename Base::State;
     using Base::Base;
-    Endpoint& remote() { return remote_; }
+    using Base::open;
     
-    /// sets this.remote to dgram received
-    void async_read(MutableBuffer buffer, Slot<ssize_t, std::error_code> slot) {
-        async_recvfrom(buffer, 0, remote_, slot);
-    }
+    using ClientSocket = SocketRef<This>;
 
     void async_recvfrom(MutableBuffer buffer, int flags, Endpoint& endpoint, Slot<ssize_t, std::error_code> slot) {
         static_assert(SocketTraits::has_recvfrom<Base>);
-        Base::read_.prepare(*this, slot, buffer, flags, &endpoint);
-    }
-
-    /// Write to this.remote
-    void async_write(ConstBuffer buffer, Slot<ssize_t, std::error_code> slot) {
-        async_sendto(buffer, remote_, slot);
+        Base::read_.flags(flags);
+        Base::read_.endpoint(&endpoint);
+        Base::read_.prepare(*this, slot, buffer);
     }
 
     void async_sendto(ConstBuffer buffer, const Endpoint& endpoint, Slot<ssize_t, std::error_code> slot) {
+        assert(Base::write_.empty());
         Base::write_.endpoint(&endpoint);
         Base::write_.prepare(*this, slot, buffer);
     }
 
-    void async_zc_write(std::size_t size, Slot<void*, std::size_t> mut, Slot<ssize_t, std::error_code> slot) {
-        async_zc_sendto(size, mut, remote_, slot);
-    }
-
-    void async_zc_sendto(std::size_t size, Slot<void*, std::size_t> mut, int flags, Endpoint& endpoint, Slot<ssize_t, std::error_code> slot) {
+    void async_zc_sendto(std::size_t size, Slot<void*, std::size_t> mut, int flags, const Endpoint& endpoint, Slot<ssize_t, std::error_code> slot) {
         Base::write_.flags(flags);
-        Base::write_.endpoint(endpoint);
+        Base::write_.endpoint(&endpoint);
         Base::write_.prepare(*this, slot, size, mut);
     }
-protected:
-    Endpoint remote_;   // last remote
 };
 
 // SocketRead for recvfrom
@@ -61,10 +51,16 @@ class SocketRead<BasicDgramSocket<SockT, StateT>, EndpointT>
     using Endpoint = EndpointT;
   public:
     using Base::empty, Base::notify;
+    using typename Base::Slot;
 
+    bool prepare(Socket& socket, Slot slot, MutableBuffer buf) {
+        return Base::prepare(socket, slot, buf);
+    }
+    
     bool complete(Socket& socket, PollEvents events) {
         std::error_code ec{};
-        ssize_t size = socket.recvfrom(Base::buf_, Base::flags_, socket.remote(), ec);
+        assert(Base::endpoint_);
+        ssize_t size = socket.recvfrom(Base::buf_, Base::flags_, *Base::endpoint_, ec);
         if(size<0 && ec.value()==EWOULDBLOCK) {
             socket.poll().add(PollEvents::Read);
             return false; // no more
@@ -90,16 +86,24 @@ class SocketWrite<BasicDgramSocket<SockT, StateT>, EndpointT>
     using Endpoint = EndpointT;
   public:
     using Base::prepare, Base::empty, Base::notify;
+    using typename Base::Slot;
+    
+    bool prepare(Socket& socket, Slot slot, ConstBuffer buf) {
+        return Base::prepare(socket, slot, buf);
+    }
 
     bool complete(Socket& socket, PollEvents events) {
         std::error_code ec{};
         ssize_t size {};
+        assert(Base::endpoint_);
+        auto& ep = *Base::endpoint_;
+        assert(!(ep==Endpoint{}));
         if(!Base::data_.data()) {
             auto wbuf = Base::buf_.prepare(Base::data_.size());
             Base::mut_(wbuf.data(),wbuf.size());
-            size = socket.sendto(wbuf, Base::flags_, socket.remote(), ec);
+            size = socket.sendto(wbuf, Base::flags_, ep, ec);
         }else {
-            size = socket.sendto(Base::data_, Base::flags_, socket.remote(), ec);
+            size = socket.sendto(Base::data_, Base::flags_, ep, ec);
         }
         if(size<0 && ec.value()==EWOULDBLOCK) {
             socket.poll().add(PollEvents::Write);
@@ -115,7 +119,5 @@ class SocketWrite<BasicDgramSocket<SockT, StateT>, EndpointT>
 };
 
 using DgramSocket = BasicDgramSocket<DgramSock, io::SocketState>;
-
-
 
 }} // toolbox::io

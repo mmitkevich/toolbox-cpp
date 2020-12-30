@@ -198,9 +198,11 @@ using AeronFragmentSlot = Slot<void*, const uint8_t*,size_t, aeron_header_t*>;
 
 template<typename SocketT>
 class AeronPubAdd : public CompletionSlot<std::error_code> {
+    using Base = CompletionSlot<std::error_code>;
 public:
     using Endpoint = typename SocketT::Endpoint;
-    bool prepare(SocketT& socket, const Endpoint& ep, SlotImpl slot) {
+    using typename Base::Slot;
+    bool prepare(SocketT& socket, const Endpoint& ep, Slot slot) {
         const char* ch = ep.channel().data();
         auto strm = ep.stream();
         if (aeron_async_add_exclusive_publication(
@@ -252,9 +254,11 @@ inline bool aeron_again(ssize_t retval) {
 
 template<typename SelfT>
 class AeronPubOffer : public CompletionSlot<ssize_t, std::error_code> {
+    using Base = CompletionSlot<ssize_t, std::error_code>;
 public:
     using Buffer = ConstBuffer;
-    bool prepare(SelfT& self, const Buffer& buf, SlotImpl slot) {
+    using typename Base::Slot;
+    bool prepare(SelfT& self, const Buffer& buf, Slot slot) {
         buf_ = buf;
         set_slot(slot);
         return false;
@@ -375,14 +379,17 @@ protected:
 
 template<typename SocketT>
 class AeronSubAdd : public CompletionSlot<std::error_code> {
+    using Base = CompletionSlot<std::error_code>;
 public:
     using Endpoint = typename SocketT::Endpoint;
+    using typename Base::Slot;
+
     constexpr static aeron_on_available_image_t avail_image = nullptr;
     constexpr static void *avail_image_data = nullptr; 
     constexpr static aeron_on_unavailable_image_t unavail_image = nullptr;
     constexpr static void *unavail_image_data = nullptr;
 
-    bool prepare(SocketT& socket, const Endpoint& ep, SlotImpl slot) {
+    bool prepare(SocketT& socket, const Endpoint& ep, Slot slot) {
         const char* ch = ep.channel().c_str();
         auto strm = ep.stream();
         if (aeron_async_add_subscription(
@@ -421,9 +428,12 @@ private:
 
 template<typename SocketT>
 class AeronSubPoll : public CompletionSlot<ssize_t, std::error_code> {
+    using Base = CompletionSlot<ssize_t, std::error_code>;
 public:
     using Buffer = ConstBuffer;
-    bool prepare(SocketT& socket, const Buffer& buf, SlotImpl slot) {
+    using typename Base::Slot;
+
+    bool prepare(SocketT& socket, const Buffer& buf, Slot slot) {
         buf_ = buf;
         set_slot(slot);
         return false;
@@ -445,9 +455,12 @@ private:
 
 template<typename SocketT>
 class AeronSubRead : public CompletionSlot<ssize_t, std::error_code> {
+    using Base = CompletionSlot<ssize_t, std::error_code>;
+    using This = AeronSubRead<SocketT>;
 public:
     using Buffer = MutableBuffer;
-    using This = AeronSubRead<SocketT>;
+    using typename Base::Slot;
+    
     constexpr static int FragmentCountLimit = 10;
 
     ~AeronSubRead() {
@@ -465,7 +478,7 @@ public:
             frag_asm_ = nullptr;
         }
     }
-    bool prepare(SocketT& socket, const Buffer& buf, SlotImpl slot) {
+    bool prepare(SocketT& socket, const Buffer& buf, Slot slot) {
         buf_ = buf;
         set_slot(slot);
         return false;

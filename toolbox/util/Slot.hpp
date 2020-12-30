@@ -86,7 +86,7 @@ class BasicSlot {
         fn_ = [](void* obj, ArgsT... args) { FnT(std::forward<ArgsT>(args)...); };
         return *this;
     }
-    // Lambda function.
+    // Lambda function (ref).
     template <typename ClassT>
     constexpr auto& bind(ClassT* obj) noexcept
     {
@@ -96,17 +96,19 @@ class BasicSlot {
         };
         return *this;
     }
-    // stateless lambdas + pointer context
-    template <typename ClassT, typename LambdaFnT>
-    constexpr auto& bind(ClassT* obj, LambdaFnT&& fn) noexcept
+    // Lambda function (copy).
+    template <typename LambdaFnT>
+    constexpr auto& bind(LambdaFnT&& fn) noexcept
     {
         //https://stackoverflow.com/questions/37481767/why-does-a-lambda-have-a-size-of-1-byte
-        static_assert(sizeof(LambdaFnT)==1,"can only bind to stateless lambdas, [](...){...}"); 
-        obj_ = obj;
+        static_assert(sizeof(LambdaFnT) <= sizeof(void*), "Can only bind to lambda with captures less then 8 bytes"); 
+        obj_ = *reinterpret_cast<void**>(&fn);
 
         fn_ = [](void* obj, ArgsT... args) {
-            void (LambdaFnT::*ptr)(ClassT&, ArgsT...) const = &LambdaFnT::operator();
-            (static_cast<LambdaFnT*>(nullptr)->*ptr)(*static_cast<ClassT*>(obj), std::forward<ArgsT>(args)...);
+            void (LambdaFnT::*pmf)(ArgsT...) const = &LambdaFnT::operator();
+            char* pch = reinterpret_cast<char*>(&obj);
+            LambdaFnT* ptr = reinterpret_cast<LambdaFnT*>(pch);
+            (ptr->*pmf)(std::forward<ArgsT>(args)...);
         };
         return *this;
     }
@@ -153,12 +155,12 @@ constexpr auto bind() noexcept
     return Slot{}.template bind<FnT>();
 }
 
-template <typename ClassT, typename LambdaFnT>
-constexpr auto bind( ClassT* obj, LambdaFnT&& fn) noexcept
+template <typename LambdaFnT>
+constexpr auto bind( LambdaFnT&& fn) noexcept
 {
-    using Traits = FunctionTraits<std::decay_t<LambdaFnT>>;
-    using Slot = typename Traits::template Pack1<BasicSlot>;
-    return Slot{}.template bind<ClassT, LambdaFnT>(obj, std::move(fn));
+    using Traits = FunctionTraits<LambdaFnT>;
+    using Slot = typename Traits::template Pack<BasicSlot>;
+    return Slot{}.template bind<LambdaFnT>(std::move(fn));
 }
 
 template <typename ClassT>

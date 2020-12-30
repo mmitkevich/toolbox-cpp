@@ -93,7 +93,6 @@ public:
     using This = BasicReactor<ImplsT...>;
     using Base = Scheduler;
     using Handle = PollHandle;
-    using Runner = BasicRunner<This>;
     using FD = os::FD;
     using ImplsTuple = std::tuple<ImplsT...>;
     constexpr static std::size_t ImplsSize = sizeof...(ImplsT);

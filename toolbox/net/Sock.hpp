@@ -816,15 +816,21 @@ struct SocketTraits {
     constexpr static  bool has_connect = boost::is_detected_v<sock_connect_t, SockT>;
 
     template<typename SockT>
-    using sock_async_connect_t = decltype(std::declval<SockT&>().async_connect(std::declval<typename SockT::Endpoint const &>(),
-        std::declval<typename SockT::Endpoint const&>(), std::declval<util::Slot<std::error_code>>));
+    using sock_async_connect_t = decltype(std::declval<SockT&>().async_connect(
+        std::declval<typename SockT::Endpoint const &>(),
+        std::declval<util::Slot<std::error_code>>()
+    ));
     template<typename SockT>
     constexpr static  bool has_async_connect = boost::is_detected_v<sock_async_connect_t, SockT>;
     
     template<typename SockT>
-    using sock_accept_t = decltype(std::declval<SockT&>().accept(std::declval<typename SockT::Endpoint const&>()));    
+    using sock_async_accept_t = decltype(std::declval<SockT&>().async_accept(
+        std::declval<typename SockT::Endpoint &>(),
+        std::declval<util::Slot<typename SockT::ClientSocket&&, std::error_code>>()
+    ));
+
     template<typename SockT>
-    constexpr static  bool has_accept = boost::is_detected_v<sock_connect_t, SockT>;
+    constexpr static  bool has_async_accept = boost::is_detected_v<sock_async_accept_t, SockT>;
 
     template<typename SockT>
     using sock_sendto_t = decltype(std::declval<SockT&>().sendto(std::declval<ConstBuffer>(), std::declval<int>(), 

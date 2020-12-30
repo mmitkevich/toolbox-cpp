@@ -163,16 +163,57 @@ BOOST_AUTO_TEST_CASE(SlotSignalCase)
     BOOST_TEST(x==2+5+3*6+2*7);
 }
 
-BOOST_AUTO_TEST_CASE(SlotContextCase)
+BOOST_AUTO_TEST_CASE(SlotSmallLambdaCase)
 {
-    struct Subject {
-        int x{2};
-    };
-    Subject s;
-    Slot<int> slot = toolbox::bind(&s, [](Subject& s, int y) { s.x = y;});
-    slot(5);
-    BOOST_TEST(s.x==5);
-    std::cout<<s.x;
+    {
+        struct Subject {
+            int x{2};
+        } s;
+        Slot<int> slot = toolbox::bind([&s](int y) { 
+            s.x = y;
+        });
+        slot(5);
+        BOOST_TEST(s.x==5);
+    }
+    {
+        Slot<int> slot = toolbox::bind([](int y) { 
+            BOOST_TEST(y==6);
+        });
+        slot(6);
+    }
+    {
+        char c = 12;
+        Slot<int> slot = toolbox::bind([c](int y) { 
+            BOOST_TEST(c==12);
+            BOOST_TEST(y==6);
+        });
+        slot(6);
+    }
+    #ifdef WONT_COMPILE
+    {
+        struct Big {std::size_t a=12; std::size_t b=13; } big;
+        Slot<int> slot = toolbox::bind([big](int y) { 
+            BOOST_TEST(big.a==12);
+            BOOST_TEST(big.b==13);
+        });
+        slot(6);
+    }
+    #endif
+    {
+        struct Clazz {
+            void op() {
+                Slot<int> slot = toolbox::bind([this](int y) {
+                    BOOST_TEST(z==12);
+                    BOOST_TEST(y==13);
+                    z=y;
+                });
+                slot(13);
+                BOOST_TEST(z==13);
+            }
+            int z=12;
+        };
+    }
+
 }
 
 BOOST_AUTO_TEST_SUITE_END()
