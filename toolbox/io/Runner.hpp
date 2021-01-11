@@ -23,6 +23,7 @@
 
 #include <atomic>
 #include <thread>
+#include <csignal>
 
 namespace toolbox {
 inline namespace io {
@@ -60,8 +61,9 @@ class TOOLBOX_API BasicRunner {
     }
 
     void operator()() {
-        init_();
-        reactor_.run();
+        if(init_())
+            reactor_.run();
+        std::raise(SIGTERM);
     }
     // Copy.
     BasicRunner(const BasicRunner&) = delete;

@@ -209,8 +209,10 @@ public:
 
     /// wakeup, could be called from another thread
     void wakeup() noexcept  { 
-        // wakeup last reactor since others are always busy-polled
-        std::get<ImplsSize-1>(impls_).wakeup(); 
+        if(state()==State::Started) {
+            // wakeup last reactor since others are always busy-polled
+            std::get<ImplsSize-1>(impls_).wakeup(); 
+        }
     }
 protected:
     std::tuple<ImplsT...> impls_;

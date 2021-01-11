@@ -149,7 +149,8 @@ class Log {
 #  define TOOLBOX_DUMP false && toolbox::Log{toolbox::Log::Dump}
 #endif
 // clang-format on
-
-#define TOOLBOX_DUMP_THIS TOOLBOX_DUMP << __FILE__<<":"<<__LINE__<<" "<<__func__<<"() this="<<std::hex<<this;
-
+#define TOOLBOX_FILE_LINE __FILE__<<":"<<__LINE__<<" "<<__func__
+#define TOOLBOX_DUMP_THIS TOOLBOX_DUMP << TOOLBOX_FILE_LINE <<"() this="<<std::hex<<this<<std::dec<<" "
+#define TOOLBOX_DUMP_NOT_IMPLEMENTED TOOLBOX_DUMP_THIS<<" not implemented!"
+#define TOOLBOX_ASSERT_NOT_IMPLEMENTED TOOLBOX_DUMP_NOT_IMPLEMENTED; assert(false)
 #endif // TOOLBOX_SYS_LOG_HPP
