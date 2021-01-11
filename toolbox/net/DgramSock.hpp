@@ -17,6 +17,7 @@
 #ifndef TOOLBOX_NET_DGRAMSOCK_HPP
 #define TOOLBOX_NET_DGRAMSOCK_HPP
 
+#include "toolbox/sys/Log.hpp"
 #include <toolbox/net/Endpoint.hpp>
 #include <toolbox/net/IoSock.hpp>
 
@@ -44,8 +45,14 @@ struct DgramSock : IoSock {
     void get_sock_name(Endpoint& ep, std::error_code& ec) noexcept { os::getsockname(get(), ep, ec); }
     void get_sock_name(Endpoint& ep) { os::getsockname(get(), ep); }
 
-    void bind(const Endpoint& ep, std::error_code& ec) noexcept { os::bind(get(), ep, ec); }
-    void bind(const Endpoint& ep) { os::bind(get(), ep); }
+    void bind(const Endpoint& ep, std::error_code& ec) noexcept { 
+        os::bind(get(), ep, ec); 
+        TOOLBOX_DUMP << "bind dgram "<<ep<<" ec "<<ec;        
+    }
+    void bind(const Endpoint& ep) { 
+        TOOLBOX_DUMP << "bind dgram "<<ep;
+        os::bind(get(), ep);
+    }
 
     ssize_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep, std::error_code& ec) noexcept {
         return os::recvfrom(get(), buf, len, flags, ep, ec);

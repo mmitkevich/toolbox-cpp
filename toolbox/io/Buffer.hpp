@@ -20,6 +20,7 @@
 #include <toolbox/Config.h>
 
 #include <boost/asio/buffer.hpp>
+#include <toolbox/util/ByteTraits.hpp>
 
 namespace toolbox {
 inline namespace io {
@@ -101,6 +102,16 @@ class TOOLBOX_API Buffer {
 
 TOOLBOX_API ConstBuffer advance(ConstBuffer buf, std::size_t n) noexcept;
 TOOLBOX_API MutableBuffer advance(MutableBuffer buf, std::size_t n) noexcept;
+
+template<typename T>
+auto to_const_buffer(const T& val) {
+  return ConstBuffer{&val, toolbox::util::byte_sizeof(val)};
+}
+
+template<typename T>
+auto to_mut_buffer(T& val) {
+  return MutableBuffer{&val, toolbox::util::byte_sizeof(val)};
+}
 
 } // namespace io
 } // namespace toolbox

@@ -24,6 +24,7 @@
 #include <system_error>
 #include <toolbox/io/Event.hpp>
 #include <toolbox/io/Reactor.hpp>
+#include <toolbox/io/DgramSocket.hpp>
 #include <toolbox/net/McastSock.hpp>
 #include <toolbox/io/Socket.hpp>
 
@@ -31,13 +32,12 @@ namespace toolbox {
 inline namespace io {
 
 
-template<typename SockT, typename StateT>
-class BasicMcastSocket : public BasicSocket<
-  BasicMcastSocket<SockT, StateT>
-  , SockT, StateT>
+template<typename DerivedT, typename SockT, typename StateT>
+class BasicMcastSocket : public BasicDgramSocket<
+  DerivedT, SockT, StateT>
 {
-    using This = BasicMcastSocket<SockT, StateT>;
-    using Base = BasicSocket<This, SockT, StateT>;
+    using This = BasicMcastSocket<DerivedT, SockT, StateT>;
+    using Base = BasicDgramSocket<DerivedT, SockT, StateT>;
   public:
     using typename Base::Sock, typename Base::PollHandle;
     using typename Base::Protocol, typename Base::Endpoint;
@@ -46,17 +46,14 @@ class BasicMcastSocket : public BasicSocket<
     using Base::poll;
     using Base::open, Base::bind;
     using Base::read, Base::write, Base::recv; 
-    using Base::connect, Base::disconnect;
-    using Base::leave_group, Base::join_group;
-
-    void async_connect(const Endpoint& ep, util::Slot<std::error_code> slot) {
-      std::error_code ec {};
-      connect(ep, ec);
-      slot(ec);
-    }
+    using Base::join_group, Base::leave_group;
 };
 
-using McastSocket = BasicMcastSocket<McastSock, io::SocketState>;
+class McastSocket: public BasicMcastSocket<McastSocket, McastSock, io::SocketState> {
+  using Base=BasicMcastSocket<McastSocket, McastSock, io::SocketState>;
+public:
+  using Base::Base;
+};
 
 } // namespace net
 } // namespace toolbox

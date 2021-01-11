@@ -6,11 +6,12 @@
 namespace toolbox { inline namespace io {
 
 
-template<typename SockT, typename StateT>
-class BasicDgramSocket : public BasicSocket< BasicDgramSocket<SockT, StateT>, SockT, StateT>
+template<typename DerivedT, typename SockT, typename StateT>
+class BasicDgramSocket : public BasicSocket< DerivedT, SockT, StateT>
 {
-    using This = BasicDgramSocket<SockT, StateT>;
-    using Base = BasicSocket<This, SockT, StateT>;
+    using This = BasicDgramSocket<DerivedT, SockT, StateT>;
+    using Base = BasicSocket<DerivedT, SockT, StateT>;
+    DerivedT* self() { return static_cast<DerivedT*>(this); } 
 public:
     using typename Base::Endpoint;
     using typename Base::Protocol;
@@ -18,36 +19,36 @@ public:
     using Base::Base;
     using Base::open;
     
-    using ClientSocket = SocketRef<This>;
+    using ClientSocket = std::reference_wrapper<This>;
 
     void async_recvfrom(MutableBuffer buffer, int flags, Endpoint& endpoint, Slot<ssize_t, std::error_code> slot) {
-        static_assert(SocketTraits::has_recvfrom<Base>);
+        //static_assert(SocketTraits::has_recvfrom<SockT>);
         Base::read_.flags(flags);
         Base::read_.endpoint(&endpoint);
-        Base::read_.prepare(*this, slot, buffer);
+        Base::read_.prepare(*self(), slot, buffer);
     }
 
     void async_sendto(ConstBuffer buffer, const Endpoint& endpoint, Slot<ssize_t, std::error_code> slot) {
         assert(Base::write_.empty());
         Base::write_.endpoint(&endpoint);
-        Base::write_.prepare(*this, slot, buffer);
+        Base::write_.prepare(*self(), slot, buffer);
     }
 
     void async_zc_sendto(std::size_t size, Slot<void*, std::size_t> mut, int flags, const Endpoint& endpoint, Slot<ssize_t, std::error_code> slot) {
         Base::write_.flags(flags);
         Base::write_.endpoint(&endpoint);
-        Base::write_.prepare(*this, slot, size, mut);
+        Base::write_.prepare(*self(), slot, size, mut);
     }
 };
 
 // SocketRead for recvfrom
-template<typename SockT, typename StateT, typename EndpointT>
-class SocketRead<BasicDgramSocket<SockT, StateT>, EndpointT>
-: public SocketRead<BasicSocket<BasicDgramSocket<SockT, StateT>, SockT, StateT>, EndpointT>
+template<typename DerivedT, typename SockT, typename StateT, typename EndpointT>
+class SocketRead<BasicDgramSocket<DerivedT, SockT, StateT>, EndpointT>
+: public SocketRead<BasicSocket<BasicDgramSocket<DerivedT, SockT, StateT>, SockT, StateT>, EndpointT>
 { 
-    using This = BasicDgramSocket<SockT, StateT>;
+    using This = BasicDgramSocket<DerivedT,SockT, StateT>;
     using Base = SocketRead<BasicSocket<This, SockT, StateT>, EndpointT>;
-    using Socket = BasicDgramSocket<SockT, StateT>;
+    using Socket = This;
     using Endpoint = EndpointT;
   public:
     using Base::empty, Base::notify;
@@ -76,13 +77,13 @@ class SocketRead<BasicDgramSocket<SockT, StateT>, EndpointT>
 
 
 // SocketWrite for sendto
-template<typename SockT, typename StateT, typename EndpointT>
-class SocketWrite<BasicDgramSocket<SockT, StateT>, EndpointT> 
-: public SocketWrite<BasicSocket<BasicDgramSocket<SockT, StateT>, SockT, StateT>, EndpointT>
+template<typename DerivedT, typename SockT, typename StateT, typename EndpointT>
+class SocketWrite<BasicDgramSocket<DerivedT, SockT, StateT>, EndpointT> 
+: public SocketWrite<BasicSocket<BasicDgramSocket<DerivedT, SockT, StateT>, SockT, StateT>, EndpointT>
 { 
-    using This = BasicDgramSocket<SockT, StateT>;
+    using This = BasicDgramSocket<DerivedT, SockT, StateT>;
     using Base = SocketWrite<BasicSocket<This, SockT, StateT>, EndpointT>;
-    using Socket = BasicDgramSocket<SockT, StateT>;
+    using Socket = This;
     using Endpoint = EndpointT;
   public:
     using Base::prepare, Base::empty, Base::notify;
@@ -118,6 +119,10 @@ class SocketWrite<BasicDgramSocket<SockT, StateT>, EndpointT>
     }
 };
 
-using DgramSocket = BasicDgramSocket<DgramSock, io::SocketState>;
+class DgramSocket : public BasicDgramSocket<DgramSocket, DgramSock, io::SocketState> {
+    using Base = BasicDgramSocket<DgramSocket, DgramSock, io::SocketState>;  
+  public:
+    using Base::Base;
+};
 
 }} // toolbox::io

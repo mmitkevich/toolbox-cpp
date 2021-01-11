@@ -36,7 +36,7 @@ class SocketConnect : public CompletionSlot<std::error_code> {
   public:
     using Socket=SocketT;
     using Endpoint=typename Socket::Endpoint;
-    using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot, Base::reset;
+    using Base::Base, Base::empty, Base::invoke, Base::operator bool, Base::set_slot, Base::reset;
     using typename Base::Slot;
     using State = typename SocketT::State;
 
@@ -67,7 +67,7 @@ class SocketConnect : public CompletionSlot<std::error_code> {
             socket.state(State::Open);
         }
         socket.poll().del(PollEvents::Write);   
-        notify(ec); // they could start read/write, etc
+        invoke(ec); // they could start read/write, etc
         return true; // all done
     }
 };
@@ -131,7 +131,7 @@ class SocketAccept : public CompletionSlot<ClientSocketT&&, std::error_code> {
     using Socket = SocketT;
     using ClientSocket = ClientSocketT;
     using Endpoint=typename Socket::Endpoint;
-    using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot, Base::reset;
+    using Base::Base, Base::empty, Base::invoke, Base::operator bool, Base::set_slot, Base::reset;
     using typename Base::Slot;
 
     bool prepare(Socket& socket, Slot slot, Endpoint* ep) {
@@ -149,7 +149,7 @@ class SocketAccept : public CompletionSlot<ClientSocketT&&, std::error_code> {
             auto sock = socket.accept(*endpoint_, ec);
             socket.poll().del(PollEvents::Read);
             ClientSocket client {socket};
-            notify(std::move(client), ec);
+            invoke(std::move(client), ec);
             return true;
         }
         return false;

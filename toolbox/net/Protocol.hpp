@@ -113,7 +113,7 @@ struct UdpProtocol {
     constexpr int type() const noexcept { return SOCK_DGRAM; }
     constexpr int protocol() const noexcept { return IPPROTO_UDP; }
 
-    static constexpr std::string_view name = "udp";
+    static constexpr std::string_view name() { return "udp"; }
   private:
     constexpr explicit UdpProtocol(int family) noexcept
     : family_{family}
@@ -130,7 +130,7 @@ struct TcpProtocol {
     static constexpr auto v4() noexcept { return TcpProtocol{AF_INET}; }
     static constexpr auto v6() noexcept { return TcpProtocol{AF_INET6}; }
 
-    static constexpr std::string_view name = "tcp";
+    static constexpr std::string_view name() { return "tcp"; }
 
     constexpr int family() const noexcept { return family_; }
     constexpr int type() const noexcept { return SOCK_STREAM; }
@@ -151,7 +151,7 @@ struct UnixDgramProtocol {
     constexpr int type() const noexcept { return SOCK_DGRAM; }
     constexpr int protocol() const noexcept { return 0; }
     
-    static constexpr std::string_view name = "unix_dgram";
+    static constexpr std::string_view name() { return "unix_dgram"; }
 };
 
 struct UnixStreamProtocol {
@@ -159,7 +159,7 @@ struct UnixStreamProtocol {
     constexpr int type() const noexcept { return SOCK_STREAM; }
     constexpr int protocol() const noexcept { return 0; }
     
-    static constexpr std::string_view name = "unix_pipe";
+    static constexpr std::string_view name() {return "unix_pipe"; }
 };
 
 struct McastProtocol {
@@ -173,13 +173,13 @@ struct McastProtocol {
     constexpr int type() const noexcept { return SOCK_DGRAM; }
     constexpr int protocol() const noexcept { return IPPROTO_UDP; }
 
-    static constexpr std::string_view name = "mcast";
+    static constexpr std::string_view name() { return "mcast"; }
 
   private:
     constexpr explicit McastProtocol(int family) noexcept
     : family_{family}
-    {
-    }
+    {}
+    
     int family_;
 };
 

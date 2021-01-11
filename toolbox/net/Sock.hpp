@@ -811,38 +811,56 @@ struct Sock : FileHandle {
 
 struct SocketTraits {
     template<typename SockT>
-    using sock_connect_t = decltype(std::declval<SockT&>().connect(std::declval<typename SockT::Endpoint const &>()));
+    using sock_connect_t = decltype(std::declval<SockT&>().connect(
+        std::declval<typename SockT::Endpoint const &>()
+    ));
     template<typename SockT>
     constexpr static  bool has_connect = boost::is_detected_v<sock_connect_t, SockT>;
-
-    template<typename SockT>
-    using sock_async_connect_t = decltype(std::declval<SockT&>().async_connect(
-        std::declval<typename SockT::Endpoint const &>(),
-        std::declval<util::Slot<std::error_code>>()
-    ));
-    template<typename SockT>
-    constexpr static  bool has_async_connect = boost::is_detected_v<sock_async_connect_t, SockT>;
     
     template<typename SockT>
-    using sock_async_accept_t = decltype(std::declval<SockT&>().async_accept(
-        std::declval<typename SockT::Endpoint &>(),
-        std::declval<util::Slot<typename SockT::ClientSocket&&, std::error_code>>()
+    using sock_accept_t = decltype(std::declval<SockT&>().accept(
+        std::declval<typename SockT::Endpoint &>()
     ));
+    template<typename SockT>
+    constexpr static  bool has_accept = boost::is_detected_v<sock_accept_t, SockT>;
 
     template<typename SockT>
-    constexpr static  bool has_async_accept = boost::is_detected_v<sock_async_accept_t, SockT>;
-
+    using sock_sendto_t = decltype(std::declval<SockT&>().sendto(
+        std::declval<ConstBuffer>(), 
+        std::declval<int>(), 
+        std::declval<typename SockT::Endpoint const&>()
+    ));
     template<typename SockT>
-    using sock_sendto_t = decltype(std::declval<SockT&>().sendto(std::declval<ConstBuffer>(), std::declval<int>(), 
-        std::declval<typename SockT::Endpoint const&>(),std::declval<std::error_code&>()));
-    template<typename SockT>
-    constexpr static  bool has_sendto = boost::is_detected_v<sock_sendto_t, SockT>;
+    constexpr static bool has_sendto = boost::is_detected_v<sock_sendto_t, SockT>;
 
     template<typename SockT>
     using sock_recvfrom_t = decltype(std::declval<SockT&>().recvfrom(std::declval<MutableBuffer>(), std::declval<int>(), 
         std::declval<typename SockT::Endpoint&>(),std::declval<std::error_code&>()));
     template<typename SockT>
     constexpr static  bool has_recvfrom = boost::is_detected_v<sock_recvfrom_t, SockT>;
+
+    template<typename SockT>
+    using sock_join_group_t = decltype(std::declval<SockT&>().join_group(
+        std::declval<typename SockT::Endpoint const &>()
+    ));
+    template<typename SockT>
+    constexpr static  bool has_join_group = boost::is_detected_v<sock_join_group_t, SockT>;
+
+    template<typename SockT>
+    using sock_leave_group_t = decltype(std::declval<SockT&>().leave_group(
+        std::declval<typename SockT::Endpoint const &>()
+    ));
+    template<typename SockT>
+    constexpr static  bool has_leave_group = boost::is_detected_v<sock_leave_group_t, SockT>;
+
+    template<typename SockT>
+    constexpr static bool is_dgram = has_recvfrom<SockT> && has_sendto<SockT> && !has_connect<SockT>;
+
+    template<typename SockT>
+    constexpr static bool is_mcast = has_join_group<SockT> && has_leave_group<SockT>;
+
+    template<typename SockT>
+    constexpr static bool is_stream = !has_recvfrom<SockT> && !has_sendto<SockT> && has_connect<SockT>;
 };
 
 } // namespace net

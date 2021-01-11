@@ -27,16 +27,24 @@ public:
     using Slot = util::Slot<ArgsT...>;
 
     using Slot::empty, Slot::operator bool, Slot::reset;
-    /// fire and reset
-    void notify(ArgsT... args) { 
+    
+    /// fire once and reset
+    void operator()(ArgsT... args) { 
+        invoke(std::forward<ArgsT>(args)...);
+    }
+
+    /// fire once and reset
+    void invoke(ArgsT...args) {
         auto s = *this;
         reset();
-        Slot::invoke(std::forward<ArgsT>(args)...);
+        s.Slot::invoke(std::forward<ArgsT>(args)...);
     }
+
     void set_slot(Slot val) { 
         assert(!val.empty());
         *static_cast<Slot*>(this) = val;
     }
+
     Slot get_slot() const { return *this; }
 };
 
@@ -44,11 +52,10 @@ template<typename...ArgsT>
 class PendingSlot : public CompletionSlot<ArgsT...> {
     using Base = CompletionSlot<ArgsT...>;
 public:
-    int& pending() { return pending_; }
+    void pending(int val) { pending_ = val; }
     int pending() const { return pending_; }
-    bool ready() const { return pending_==0; }
     void operator()(ArgsT...args) {
-        if(ready())
+        if(--pending_==0)
             Base::operator()(std::forward<ArgsT>(args)...);
     }
 protected:
@@ -78,7 +85,7 @@ class SocketRead : public CompletionSlot<ssize_t, std::error_code> {
     using Socket = SocketT;
     using Endpoint = EndpointT;
     using typename Base::Slot;
-    using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot, Base::get_slot;
+    using Base::Base, Base::empty, Base::invoke, Base::operator bool, Base::set_slot, Base::get_slot;
 
     void flags(int val) { flags_ = val; }
     void endpoint(Endpoint* ep) { endpoint_ = ep; }
@@ -117,11 +124,13 @@ class SocketRead : public CompletionSlot<ssize_t, std::error_code> {
     }
     void reset() { 
         Base::reset();
-        buf_ = {};
+        //buf_ = {};  // keep last buf
         flags_ = 0;
-        endpoint_ = {};
+        //endpoint_ = {}; // keep last ep
     }
+    MutableBuffer& buf() { return buf_; }
   protected:
+    friend Socket;
     MutableBuffer buf_ {};
     int flags_ {};    
     Endpoint* endpoint_ {};
@@ -141,7 +150,7 @@ class SocketWrite : public CompletionSlot<ssize_t, std::error_code> {
     using Endpoint = EndpointT;
     using typename Base::Slot;
 
-    using Base::Base, Base::empty, Base::notify, Base::operator bool, Base::set_slot;
+    using Base::Base, Base::empty, Base::invoke, Base::operator bool, Base::set_slot;
 
     void flags(int val) { flags_ = val; }
     void endpoint(const Endpoint* ep) { endpoint_ = ep; }
@@ -204,6 +213,7 @@ class SocketWrite : public CompletionSlot<ssize_t, std::error_code> {
         flags_ = 0;
     }
   protected:
+    friend Socket;
     ConstBuffer data_ {};
     const Endpoint* endpoint_ {};
     int flags_ {};
@@ -245,6 +255,7 @@ class BasicSocket : public SockT, public BasicSocketState<StateT> {
     using Base = SockT;
     using SocketState = BasicSocketState<StateT>;
     using This = BasicSocket<DerivedT, SockT, StateT>;
+    using Self = DerivedT;
 public:
     using PollHandle = toolbox::PollHandle;
     using typename Base::Protocol;
@@ -314,6 +325,10 @@ public:
         read_.prepare(*impl(), slot, buffer);
     }
 
+    MutableBuffer rbuf() {
+        return read_.buf();
+    }
+
     void async_write(ConstBuffer buffer, Slot<ssize_t, std::error_code> slot) {
         read_.flags(0);
         write_.prepare(*impl(), slot,  buffer);
@@ -322,6 +337,10 @@ public:
     void async_zc_write(std::size_t size, Slot<void*, std::size_t> mut, Slot<ssize_t, std::error_code> slot) {
         read_.flags(0);
         write_.prepare(*impl(), slot, size, mut);
+    }
+
+    ConstBuffer wbuf() {
+        return write_.buf_;
     }
 
     IoSlot io_slot() { return io_slot_; }  
@@ -340,6 +359,7 @@ protected:
     void on_io_event(CyclTime now, os::FD fd, PollEvents events) {        
         auto old_batching = poll().batching(true); // disable commits of poll flags while in the cycle
         for(std::size_t i=0; i<64; i++) {
+            bool again = false;
             // read something
             if(events & PollEvents::Read) {
                 while(read_) {
@@ -347,6 +367,7 @@ protected:
                         events = events - PollEvents::Read; // read will block
                         break;
                     }
+                    again = true;   // some interest
                 }
             }            
             // write ready things
@@ -356,9 +377,10 @@ protected:
                         events = events - PollEvents::Write; // write will block
                         break;
                     }
+                    again = true;   // some interest
                 }
             }
-            if(!(events & (PollEvents::Read+PollEvents::Write)))
+            if(!again || !(events & (PollEvents::Read+PollEvents::Write)))
                 break; // nothing more to do
         }
         poll().batching(old_batching);
@@ -374,47 +396,4 @@ protected:
     Endpoint local_;
     Endpoint remote_;
 };
-
-
-template<typename SocketT, typename SocketPtrT=SocketT*>
-class SocketRef {
-public:
-    using Endpoint = typename SocketT::Endpoint;
-    using Protocol = typename SocketT::Protocol;
-    using Socket = SocketT;
-    using type = Socket;
-public:
-    SocketRef() = default;
-
-    SocketRef(SocketPtrT&& socket)
-    : impl_(std::move(socket)) {}
-
-    template<typename ReactorT, typename ProtocolT>
-    void open(ReactorT& r, ProtocolT p){ impl_->open(r, p); }
-
-    template<typename EndpointT>
-    void bind(const EndpointT& ep) { impl_->bind(ep); }
-
-    template<typename...ArgsT>
-    void listen(ArgsT...args) { impl_->listen(std::forward<ArgsT>(args)...); }
-
-    template<typename...ArgsT>
-    void async_read(ArgsT... args) { impl_->async_read(std::forward<ArgsT>(args)...); }
-    
-    template<typename...ArgsT>
-    void async_write(ArgsT... args) { impl_->async_write(std::forward<ArgsT>(args)...); }
-
-    template<typename...ArgsT>
-    void async_connect(ArgsT... args) { impl_->async_connect(std::forward<ArgsT>(args)...); }
-
-    template<typename...ArgsT>
-    void async_accept(ArgsT... args) { impl_->async_accept(std::forward<ArgsT>(args)...); }
-
-    // does not owns so does not closes
-    void close() {}
-private:
-    SocketPtrT impl_{};
-};
-
-
 }}

@@ -86,7 +86,7 @@ inline StreamEndpoint parse_stream_endpoint(const std::string& uri)
 inline TcpEndpoint parse_stream_endpoint(const std::string& uri) {
     return parse_ip_endpoint<TcpEndpoint>(uri);
 }
-class McastEndpoint : public boost::asio::ip::basic_endpoint<McastProtocol> {
+class McastEndpoint : public BasicIpEndpoint<McastProtocol> {
 public:
     using Base = boost::asio::ip::basic_endpoint<McastProtocol>;
     using Protocol = McastProtocol;
@@ -98,9 +98,13 @@ public:
     McastEndpoint& interface(int index) { interface_index_ = index; return *this; }
 private:
     std::string interface_name_;
-    int interface_index_{};
+    int interface_index_{-1};
 };
 
+template<typename ProtocolT>
+IpEndpoint ip_endpoint(const BasicIpEndpoint<ProtocolT>& ep) {
+    return IpEndpoint(ep.address(), ep.port());
+}
 
 TOOLBOX_API std::istream& operator>>(std::istream& is, DgramEndpoint& ep);
 TOOLBOX_API std::istream& operator>>(std::istream& is, StreamEndpoint& ep);

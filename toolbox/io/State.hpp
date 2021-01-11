@@ -11,7 +11,8 @@ enum State: std::uint16_t {
     Started,
     Stopping,
     Stopped,
-    Failed
+    Failed,
+    Crashed
 };
 
 inline std::ostream& operator<<(std::ostream& os, const State& self) {

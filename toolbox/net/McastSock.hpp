@@ -18,6 +18,8 @@
 #define TOOLBOX_NET_MCASTSOCK_HPP
 
 #include "toolbox/net/Protocol.hpp"
+#include "toolbox/sys/Log.hpp"
+#include <system_error>
 #include <toolbox/net/Endpoint.hpp>
 #include <toolbox/net/IoSock.hpp>
 #include <toolbox/net/IpAddr.hpp>
@@ -250,96 +252,93 @@ struct McastSock : DgramSock {
 
     using Base::recvfrom, Base::sendto;
     
-    // Logically const.
-    void get_sock_name(Endpoint& ep, std::error_code& ec) noexcept {
-        os::getsockname(get(), ep, ec);
+    void bind(const Endpoint& ep, std::error_code& ec) noexcept { 
+        os::bind(get(), ep, ec); 
+        TOOLBOX_DUMP << "bind mcast "<<ep<<" ec "<<ec;        
     }
-    void get_sock_name(Endpoint& ep) { os::getsockname(get(), ep); }
-    void bind(const Endpoint& ep, std::error_code& ec) noexcept { os::bind(get(), ep, ec); }
-    void bind(const Endpoint& ep) { os::bind(get(), ep); }
-    // Mcast connect is join_group
-    void connect(const Endpoint& ep, std::error_code& ec) noexcept {
+    
+    void bind(const Endpoint& ep) { 
+        TOOLBOX_DUMP << "bind mcast "<<ep;
+        os::bind(get(), ep);
+    }
+
+    void join_group(const Endpoint& ep, std::error_code& ec) noexcept {
         if(!ep.interface().empty()) {
             auto iface = os::if_addrtoname(ep.interface());
             join_group(ep.address(), iface.c_str(), ec);
-        } else {
+        } else if(ep.interface_index()>=0) {
             join_group(ep.address(), ep.interface_index(), ec);
+        } else {
+            ec = make_error_code(std::errc::no_such_device);
         }
     }
-    void connect(const Endpoint& ep) { 
+
+    void join_group(const Endpoint& ep) { 
         if(!ep.interface().empty()) {
             auto iface = os::if_addrtoname(ep.interface());
             join_group(ep.address(), iface.c_str());
-        } else {
+        } else if(ep.interface_index()>=0) {
             join_group(ep.address(), ep.interface_index());
+        } else {
+            throw std::system_error(make_error_code(std::errc::no_such_device), "join_group");
         }
     }
-    // Mcast disconnect is leave_group
-    void disconnect(const Endpoint& ep, std::error_code& ec) noexcept {
+
+    void leave_group(const Endpoint& ep, std::error_code& ec) noexcept {
         assert(!empty());
         if(!ep.interface().empty()) {
             auto iface = os::if_addrtoname(ep.interface());
             leave_group(ep.address(), iface.c_str(), ec);
-        } else {
+        } else if(ep.interface_index()>=0) {
             leave_group(ep.address(), ep.interface_index(), ec);
+        } else {
+            ec = make_error_code(std::errc::no_such_device);
         }
     }
-    void disconnect(const Endpoint& ep) { 
+
+    void leave_group(const Endpoint& ep) { 
         assert(!empty());
         if(!ep.interface().empty()) {
             auto iface = os::if_addrtoname(ep.interface());
             leave_group(ep.address(), ep.interface().c_str());
-        } else {
+        } else if(ep.interface_index()>=0) {
             leave_group(ep.address(), ep.interface_index());
+        } else {
+            throw std::system_error(make_error_code(std::errc::no_such_device), "leave_group");
         }
     }
-    /*ssize_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep, std::error_code& ec) noexcept {
-        return os::recvfrom(get(), buf, len, flags, ep, ec);
-    }
-    std::size_t recvfrom(void* buf, std::size_t len, int flags, Endpoint& ep) {
-        return os::recvfrom(get(), buf, len, flags, ep);
-    }
-    ssize_t recvfrom(MutableBuffer buf, int flags, Endpoint& ep, std::error_code& ec) noexcept {
-        return os::recvfrom(get(), buf, flags, ep, ec);
-    }
-    std::size_t recvfrom(MutableBuffer buf, int flags, Endpoint& ep) {
-        return os::recvfrom(get(), buf, flags, ep);
-    }
-    ssize_t sendto(const void* buf, std::size_t len, int flags, const Endpoint& ep, std::error_code& ec) noexcept {
-        return os::sendto(get(), buf, len, flags, ep, ec);
-    }
-    std::size_t sendto(const void* buf, std::size_t len, int flags, const Endpoint& ep) {
-        return os::sendto(get(), buf, len, flags, ep);
-    }
-    ssize_t sendto(ConstBuffer buf, int flags, const Endpoint& ep, std::error_code& ec) noexcept {
-        return os::sendto(get(), buf, flags, ep, ec);
-    }
-    std::size_t sendto(ConstBuffer buf, int flags, const Endpoint& ep) {
-        return os::sendto(get(), buf, flags, ep);
-    }*/
+
     void join_group(const IpAddr& addr, unsigned ifindex, std::error_code& ec) noexcept {
-        return toolbox::join_group(get(), addr, ifindex, ec);
+        toolbox::join_group(get(), addr, ifindex, ec);
+        TOOLBOX_DUMP << "join_group "<<addr<<" interface "<<ifindex<<" ec "<<ec;            
     }
     void join_group(const IpAddr& addr, unsigned ifindex) {
-        return toolbox::join_group(get(), addr, ifindex);
+        TOOLBOX_DUMP << "join_group "<<addr<<" interface "<<ifindex;
+        toolbox::join_group(get(), addr, ifindex);
     }
     void join_group(const IpAddr& addr, const char* ifname, std::error_code& ec) noexcept {
-        return toolbox::join_group(get(), addr, ifname, ec);
+        toolbox::join_group(get(), addr, ifname, ec);
+        TOOLBOX_DUMP << "join_group "<<addr<<" interface "<<ifname<<" ec "<<ec;
     }
     void join_group(const IpAddr& addr, const char* ifname) {
-        return toolbox::join_group(get(), addr, ifname);
+        TOOLBOX_DUMP << "join_group "<<addr<<" interface "<<ifname;
+        toolbox::join_group(get(), addr, ifname);
     }
     void leave_group(const IpAddr& addr, unsigned ifindex, std::error_code& ec) noexcept {
-        return toolbox::leave_group(get(), addr, ifindex, ec);
+        toolbox::leave_group(get(), addr, ifindex, ec);
+        TOOLBOX_DUMP << "leave_group "<<addr<<" interface "<<ifindex<<" ec "<<ec;                
     }
     void leave_group(const IpAddr& addr, unsigned ifindex) {
+        TOOLBOX_DUMP << "leave_group "<<addr<<" interface "<<ifindex;
         return toolbox::leave_group(get(), addr, ifindex);
     }
     void leave_group(const IpAddr& addr, const char* ifname, std::error_code& ec) noexcept {
-        return toolbox::leave_group(get(), addr, ifname, ec);
+        toolbox::leave_group(get(), addr, ifname, ec);
+        TOOLBOX_DUMP << "leave_group "<<addr<<" interface "<<ifname<<" ec "<<ec;        
     }
     void leave_group(const IpAddr& addr, const char* ifname) {
-        return toolbox::leave_group(get(), addr, ifname);
+        TOOLBOX_DUMP << "leave_group "<<addr<<" interface "<<ifname;
+        toolbox::leave_group(get(), addr, ifname);
     }
     void set_ip_mcast_if(const char* ifname, std::error_code& ec) noexcept {
         return toolbox::set_ip_mcast_if(get(), family(), ifname, ec);
