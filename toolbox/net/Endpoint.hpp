@@ -86,9 +86,9 @@ inline StreamEndpoint parse_stream_endpoint(const std::string& uri)
 inline TcpEndpoint parse_stream_endpoint(const std::string& uri) {
     return parse_ip_endpoint<TcpEndpoint>(uri);
 }
-class McastEndpoint : public BasicIpEndpoint<McastProtocol> {
+class McastEndpoint : public BasicIpEndpoint<UdpProtocol> {
 public:
-    using Base = boost::asio::ip::basic_endpoint<McastProtocol>;
+    using Base = boost::asio::ip::basic_endpoint<UdpProtocol>;
     using Protocol = McastProtocol;
 public:
     using Base::Base;

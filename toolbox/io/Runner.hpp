@@ -52,7 +52,9 @@ class TOOLBOX_API BasicRunner {
     : reactor_{r}
     , init_{init}
     , thread_{run_thread<BasicRunner<ReactorT, InitFn>>, std::ref(*this), config}
-    { }
+    {
+        assert(&reactor_);
+     }
 
     ~BasicRunner() {
         reactor_.stop();

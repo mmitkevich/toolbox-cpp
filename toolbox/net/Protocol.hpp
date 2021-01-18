@@ -114,7 +114,7 @@ struct UdpProtocol {
     constexpr int protocol() const noexcept { return IPPROTO_UDP; }
 
     static constexpr std::string_view name() { return "udp"; }
-  private:
+  protected:
     constexpr explicit UdpProtocol(int family) noexcept
     : family_{family}
     {
@@ -162,25 +162,19 @@ struct UnixStreamProtocol {
     static constexpr std::string_view name() {return "unix_pipe"; }
 };
 
-struct McastProtocol {
+struct McastProtocol : UdpProtocol {
     friend bool operator==(McastProtocol lhs, McastProtocol rhs) { return lhs.family_ == rhs.family_; }
     friend bool operator!=(McastProtocol lhs, McastProtocol rhs) { return lhs.family_ != rhs.family_; }
 
     static constexpr auto v4() noexcept { return McastProtocol{AF_INET}; }
     static constexpr auto v6() noexcept { return McastProtocol{AF_INET6}; }
 
-    constexpr int family() const noexcept { return family_; }
-    constexpr int type() const noexcept { return SOCK_DGRAM; }
-    constexpr int protocol() const noexcept { return IPPROTO_UDP; }
-
     static constexpr std::string_view name() { return "mcast"; }
 
   private:
     constexpr explicit McastProtocol(int family) noexcept
-    : family_{family}
+    : UdpProtocol {family}
     {}
-    
-    int family_;
 };
 
 

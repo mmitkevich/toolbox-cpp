@@ -113,6 +113,11 @@ class BasicSlot {
         return *this;
     }
 
+    BasicSlot<ArgsT...> release() {
+        auto result = *this;
+        reset(nullptr);
+        return result;
+    }
     // Member function.
     template <auto MemFnT, typename ClassT = typename FunctionTraits<decltype(MemFnT)>::ClassType>
     constexpr auto& bind(ClassT* obj) noexcept

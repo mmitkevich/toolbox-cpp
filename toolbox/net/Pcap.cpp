@@ -11,6 +11,9 @@ void PcapDevice::open()
     char errbuf[PCAP_ERRBUF_SIZE];
     handle_ = pcap_open_offline(input_.data(), errbuf);
     assert(handle_!=nullptr);
+    if(!handle_) {
+        throw std::runtime_error(errbuf);
+    }
 }
 
 void PcapDevice::close()

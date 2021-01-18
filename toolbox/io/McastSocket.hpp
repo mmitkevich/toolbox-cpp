@@ -49,10 +49,21 @@ class BasicMcastSocket : public BasicDgramSocket<
     using Base::join_group, Base::leave_group;
 };
 
-class McastSocket: public BasicMcastSocket<McastSocket, McastSock, io::SocketState> {
-  using Base=BasicMcastSocket<McastSocket, McastSock, io::SocketState>;
-public:
-  using Base::Base;
+template<class McastSockT=McastSock, typename StateT=io::SocketState>
+class McastSocket: public BasicMcastSocket<McastSocket<McastSockT, StateT>, McastSockT, StateT> {
+    using Base=BasicMcastSocket<McastSocket, McastSock, io::SocketState>;
+    using typename Base::SocketOpen, typename Base::SocketRead, typename Base::SocketWrite;
+  public:
+    using Base::Base;
+  protected:
+    friend Base; friend class Base::Base; friend class Base::Base::Base;
+    SocketOpen& open_impl() { return open_impl_; }
+    SocketRead& read_impl() { return read_impl_; }
+    SocketWrite& write_impl() { return write_impl_; }
+  protected:
+    SocketOpen open_impl_;
+    SocketRead read_impl_;
+    SocketWrite write_impl_;
 };
 
 } // namespace net

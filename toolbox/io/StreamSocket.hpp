@@ -30,55 +30,11 @@
 namespace toolbox {
 inline namespace io {
 
-template<typename SocketT>
-class SocketConnect : public CompletionSlot<std::error_code> {
-    using Base=CompletionSlot<std::error_code>;
-  public:
-    using Socket=SocketT;
-    using Endpoint=typename Socket::Endpoint;
-    using Base::Base, Base::empty, Base::invoke, Base::operator bool, Base::set_slot, Base::reset;
-    using typename Base::Slot;
-    using State = typename SocketT::State;
 
-    bool prepare(Socket& socket, const Endpoint& ep, Slot slot) {
-        if(*this) {
-            throw std::system_error { make_error_code(std::errc::operation_in_progress), "connect" };
-        }
-        set_slot(slot);
-        std::error_code ec {};
-        socket.remote() = ep;
-        socket.connect(ep, ec);
-        if (ec.value() == EINPROGRESS) { //ec != std::errc::operation_in_progress
-            socket.poll().add(PollEvents::Write);
-            return false;
-        }
-        if (ec) {
-            throw std::system_error{ec, "connect"};
-        }
-        return true;
-    }
-    bool complete(Socket& socket, PollEvents events) {
-        std::error_code ec{};
-        if((events & PollEvents::Error)) {
-            ec = socket.get_error();
-            socket.remote() = {}; // didn't connect
-            socket.state(State::Closed);
-        } else if((events & PollEvents::Write)) {
-            socket.state(State::Open);
-        }
-        socket.poll().del(PollEvents::Write);   
-        invoke(ec); // they could start read/write, etc
-        return true; // all done
-    }
-};
-
-template<typename SockT, typename StateT>
-class BasicStreamSocket : public BasicSocket<
-    BasicStreamSocket<SockT, StateT>,
-    SockT, StateT> 
-{
-    using This = BasicStreamSocket<SockT, StateT>;
-    using Base = BasicSocket<This, SockT, StateT>;
+template<class Self, class SockT, typename StateT>
+class BasicStreamSocket : public BasicSocket<Self, SockT, StateT> {
+    using Base = BasicSocket<Self, SockT, StateT>;
+    Self* self() { return static_cast<Self*>(this); }
 public:
     using typename Base::PollHandle;
     using typename Base::Endpoint;
@@ -86,6 +42,44 @@ public:
     using typename Base::State;
 public:
     using Base::Base;
+
+    class SocketConnect : public CompletionSlot<std::error_code> {
+        using Base = CompletionSlot<std::error_code>;
+    public:
+        using Base::Base, Base::empty, Base::invoke, Base::operator bool, Base::set_slot, Base::reset;
+        using typename Base::Slot;
+
+        bool prepare(Self& self, const Endpoint& ep, Slot slot) {
+            if(*this) {
+                throw std::system_error { make_error_code(std::errc::operation_in_progress), "connect" };
+            }
+            set_slot(slot);
+            std::error_code ec {};
+            self.remote() = ep;
+            self.connect(ep, ec);
+            if (ec.value() == EINPROGRESS) { //ec != std::errc::operation_in_progress
+                self.poll().add(PollEvents::Write);
+                return false;
+            }
+            if (ec) {
+                throw std::system_error{ec, "connect"};
+            }
+            return true;
+        }
+        bool complete(Self& self, PollEvents events) {
+            std::error_code ec{};
+            if((events & PollEvents::Error)) {
+                ec = self.get_error();
+                self.remote() = {}; // didn't connect
+                self.state(State::Closed);
+            } else if((events & PollEvents::Write)) {
+                self.state(State::Open);
+            }
+            self.poll().del(PollEvents::Write);   
+            invoke(ec); // they could start read/write, etc
+            return true; // all done
+        }
+    };
 
     using Base::state, Base::poll;
     using Base::read, Base::write;
@@ -103,12 +97,12 @@ public:
             poll().mod(io_slot());              // sync
         }
     }
-    Endpoint& remote() { return remote_; }
-    const Endpoint& remote() const { return remote_; }
+    //Endpoint& remote() { return remote_; }
+    //const Endpoint& remote() const { return remote_; }
   protected:
     friend Base;
     using Base::io_slot, Base::on_io_event;
-    IoSlot conn_slot() { return util::bind<&This::on_conn_event>(this); }
+    IoSlot conn_slot() { return util::bind<&Self::on_conn_event>(self()); }
     void on_conn_event(CyclTime now, os::FD fd, PollEvents events) {
         if(conn_) {
             poll().mod(io_slot());   
@@ -116,68 +110,83 @@ public:
         }
     }
 protected:
-    SocketConnect<This> conn_;
-    Endpoint remote_ {};   // what we connect to
+    SocketConnect conn_;
+    //Endpoint remote_ {};   // what we connect to
 };
 
-using StreamSocket = BasicStreamSocket<StreamSockClnt, io::SocketState>;
-
-
-
-template<typename SocketT, typename ClientSocketT>
-class SocketAccept : public CompletionSlot<ClientSocketT&&, std::error_code> {
-    using Base = CompletionSlot<std::error_code>;
+template<class SockClntT, typename StateT>
+class StreamSocket : public BasicStreamSocket<StreamSocket<SockClntT, StateT>, SockClntT, StateT> {
+    using Base = BasicStreamSocket<StreamSocket<SockClntT, StateT>, SockClntT, StateT>;
+    using typename Base::SocketConnect;
   public:
-    using Socket = SocketT;
-    using ClientSocket = ClientSocketT;
-    using Endpoint=typename Socket::Endpoint;
-    using Base::Base, Base::empty, Base::invoke, Base::operator bool, Base::set_slot, Base::reset;
-    using typename Base::Slot;
-
-    bool prepare(Socket& socket, Slot slot, Endpoint* ep) {
-        if(*this) {
-            throw std::system_error { make_error_code(std::errc::operation_in_progress), "accept" };
-        }
-        endpoint_ = ep;
-        set_slot(slot);
-        socket.poll().add(PollEvents::Read);
-        return true;
-    }
-    bool complete(Socket& socket, PollEvents events) {
-        if(events & PollEvents::Read) {
-            std::error_code ec {};
-            auto sock = socket.accept(*endpoint_, ec);
-            socket.poll().del(PollEvents::Read);
-            ClientSocket client {socket};
-            invoke(std::move(client), ec);
-            return true;
-        }
-        return false;
-    }
-protected:
-    Endpoint *endpoint_{};
+    using Base::Base;
+  protected:
+    friend Base;
+    SocketConnect& connect_impl() { return connect_impl_; }
+  protected:
+    SocketConnect connect_impl_;
 };
+
 
 /// adds listen and accept
-template<typename SockT, typename SockClntT, typename StateT>
-class BasicStreamServerSocket : public BasicSocket<
-    BasicStreamServerSocket<SockT, SockClntT, StateT>, 
-    SockT, StateT>
+template<class Self, class SockT, class ClientSocketT, typename StateT>
+class BasicStreamServerSocket : public BasicSocket<Self, SockT, StateT>
 {
-    using This = BasicStreamServerSocket<SockT, SockClntT, StateT>;
-    using Base = BasicSocket<This, SockT, StateT>;
+    using Base = BasicSocket<Self, SockT, StateT>;
+    Self* self() { return static_cast<Self*>(this); }
+    using typename Base::SocketOpen;
 public:
     using typename Base::PollHandle;
     using typename Base::Protocol;
     using typename Base::Endpoint;
-    using ClientSocket = BasicStreamSocket<SockClntT, StateT>;
-    using AcceptOp = SocketAccept<This, ClientSocket>;
+    using ClientSocket = ClientSocketT;
 public:
     using Base::Base;
-    using Base::poll, Base::sock, Base::state;
+    using Base::poll, Base::state;
     using Base::read, Base::write, Base::recv;
     
-    PollHandle poll(SockClntT& sock) {
+    class SockOpen: public BasicSocket<Self, SockT, StateT>::SockOpen {
+        using Base = typename BasicSocket<Self, SockT, StateT>::SockOpen;
+      public:
+        void prepare(Self& self) {
+            Base::prepare(self);
+            if (self.is_ip_family()) {
+                set_tcp_no_delay(self.get(), true);
+            }
+            self.set_reuse_addr(true);
+        }
+    };
+
+    class SocketAccept : public CompletionSlot<ClientSocket&&, std::error_code> {
+        using Base = CompletionSlot<ClientSocket&&, std::error_code>;
+    public:
+        using Base::Base, Base::empty, Base::invoke, Base::operator bool, Base::set_slot, Base::reset;
+        using typename Base::Slot;
+        bool prepare(Self& self, Slot slot, Endpoint* ep) {
+            if(*this) {
+                throw std::system_error { make_error_code(std::errc::operation_in_progress), "accept" };
+            }
+            endpoint_ = ep;
+            set_slot(slot);
+            self.poll().add(PollEvents::Read);
+            return true;
+        }
+        bool complete(Self& self, PollEvents events) {
+            if(events & PollEvents::Read) {
+                std::error_code ec {};
+                auto sock = self.accept(*endpoint_, ec);
+                self.poll().del(PollEvents::Read);
+                ClientSocket client {self};
+                invoke(std::move(client), ec);
+                return true;
+            }
+            return false;
+        }
+    protected:
+        Endpoint *endpoint_{};
+    };
+
+    PollHandle poll(ClientSocket& sock) {
         PollHandle p = poll();
         p.fd(sock.get());
         return p;
@@ -185,35 +194,39 @@ public:
 
     void listen(int backlog=0) { 
         state(SocketState::Listening);
-        sock().listen(backlog);
+        Base::listen(backlog);
     }
     void async_accept(Endpoint& ep, Slot<ClientSocket&&, std::error_code> slot) {
-        accept_.prepare(*this, slot, &ep);
+        self()->accept_impl().prepare(*self(), slot, &ep);
     }
 protected:
     void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
-        if(accept_) {
-            accept_.complete(poll(), sock());
+        if(self()->accept_impl()) {
+            self()->accept_impl().complete(*self(), events);
         }
     }  
-protected:
-    AcceptOp accept_;
 };
 
-template<typename SockT, typename SockClntT, typename StateT>
-class SockOpen<BasicStreamServerSocket<SockT, SockClntT, StateT>> {
-    using Socket = BasicStreamServerSocket<SockT, SockClntT, StateT>;
+template<class SockServT=StreamSockServ, class SockClntT=StreamSockClnt, typename StateT=io::SocketState>
+class StreamServerSocket : public  BasicStreamServerSocket<
+    StreamServerSocket<SockServT, StreamSockClnt>, 
+    SockServT, StreamSocket<SockClntT, StateT>, StateT> 
+{
+    using Base = BasicStreamServerSocket<
+        StreamServerSocket<SockServT, StreamSockClnt>,
+        SockServT, StreamSocket<SockClntT, StateT>, StateT>;
+    using typename Base::SocketAccept, typename Base::SocketOpen;
   public:
-    void prepare(Socket& socket) {
-        socket.set_non_block();
-        if (socket.is_ip_family()) {
-            set_tcp_no_delay(socket.get(), true);
-        }
-        socket.set_reuse_addr(true);
-    }
+    using Base::Base;
+  protected:
+    friend Base;
+    friend typename Base::Base;
+    SocketAccept& accept_impl() { return accept_impl_ ;}
+    SocketOpen& open_impl() { return open_impl_; }
+  protected:
+    SocketAccept accept_impl_;
+    SocketOpen open_impl_;
 };
-
-using StreamServerSocket = BasicStreamServerSocket<net::StreamSockServ, net::StreamSockClnt, io::SocketState>;
 
 } // namespace io
 } // namespace toolbox

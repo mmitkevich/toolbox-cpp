@@ -15,6 +15,7 @@
 // limitations under the License.
 
 #include "Endpoint.hpp"
+#include "ParsedUrl.hpp"
 #include <netinet/in.h>
 #include <sys/socket.h>
 
@@ -22,45 +23,13 @@ using namespace std;
 
 namespace toolbox {
 inline namespace net {
-namespace {
-
-pair<string, string> split_ip_addr(string_view addr, char delim)
-{
-    // Reverse find for compatibility with ipv6 address notation.
-    const auto pos = addr.find_last_of(delim);
-    string node, service;
-    if (pos == string::npos) {
-        node = addr;
-    } else {
-        node = addr.substr(0, pos);
-        service = addr.substr(pos + 1);
-    }
-    // Remove square braces arround ipv6 address.
-    if (node.size() >= 2 && node.front() == '[' && node.back() == ']') {
-        node = node.substr(1, node.size() - 2);
-    }
-    return {node, service};
-}
-
-pair<string, string> split_uri(string_view uri)
-{
-    const auto pos = uri.find("://");
-    string scheme, addr;
-    if (pos == string::npos) {
-        addr = uri;
-    } else {
-        scheme = uri.substr(0, pos);
-        addr = uri.substr(pos + 3);
-    }
-    return {scheme, addr};
-}
-} // namespace
 
 AddrInfoPtr parse_endpoint(std::string_view uri, int type, int default_family/*=-1*/)
 {
     int family{default_family}, protocol{0};
-    const auto [scheme, addr] = split_uri(uri);
-    
+    ParsedUrl parsed {uri};
+    const auto scheme = parsed.proto();
+
     if (scheme.empty())
         family = default_family;
 
@@ -89,7 +58,7 @@ AddrInfoPtr parse_endpoint(std::string_view uri, int type, int default_family/*=
             protocol = IPPROTO_UDP;
         }
     } else if (scheme == "unix") {
-        return get_unix_addrinfo(addr, type);
+        return get_unix_addrinfo(parsed.host(), type);
     } else if(scheme.empty()) { 
         if(protocol==0 && (family==AF_INET || family==AF_INET6)) {
             // find reasonable defaults
@@ -102,7 +71,9 @@ AddrInfoPtr parse_endpoint(std::string_view uri, int type, int default_family/*=
     if (family < 0) {
         throw invalid_argument{"invalid uri: "s + std::string{uri}};
     }
-    auto [node, service] = split_ip_addr(addr, ':');
+    const auto node = std::string{parsed.host()};
+    const  auto service = std::string{parsed.service()};
+
     return os::getaddrinfo(!node.empty() ? node.c_str() : nullptr,
                            !service.empty() ? service.c_str() : nullptr, family, type, protocol);
 }

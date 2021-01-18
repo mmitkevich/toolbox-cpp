@@ -46,8 +46,8 @@ public:
     }
     
     void stop() {
-      if(state()!=State::Stopping && state()!=State::Stopped) {
-          state(State::Stopping);
+      if(state()!=State::PendingClosed && state()!=State::Closed) {
+          state(State::Closed);
           stop_.store(true, std::memory_order_release);
       }
     }
@@ -57,8 +57,8 @@ public:
     HookList& hooks() noexcept { return hooks_; }
     void run()
     {
-        state(State::Starting);
-        state(State::Started);
+        state(State::PendingOpen);
+        state(State::Open);
         while (!stop_.load(std::memory_order_acquire)) {
             std::this_thread::yield();
             auto now = CyclTime::now();
@@ -66,8 +66,8 @@ public:
                 timers(Priority::Low).dispatch(now);
             }
         }
-        state(State::Stopping);
-        state(State::Stopped);
+        state(State::PendingClosed);
+        state(State::Closed);
     }
     
     MonoTime next_expiry(MonoTime next) const {
@@ -107,7 +107,7 @@ protected:
     static_assert(static_cast<int>(Priority::Low) == 1);
     std::atomic<bool> stop_{false};
     Signal<Scheduler*, State> state_changed_;
-    std::atomic<State> state_{State::Stopped};
+    std::atomic<State> state_{State::Closed};
     TimerPool tp_;
     std::array<TimerQueue, 2> tqs_{tp_, tp_};
     HookList hooks_;    

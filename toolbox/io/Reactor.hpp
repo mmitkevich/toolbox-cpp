@@ -145,8 +145,8 @@ public:
     }
     /// event loop cycle
     void run() {
-        state(State::Starting);
-        state(State::Started);
+        state(State::PendingOpen);
+        state(State::Open);
         std::size_t i {0};
         while (!Scheduler::stop_.load(std::memory_order_acquire)) {
             // Busy-wait for a small number of cycles after work was done.
@@ -155,8 +155,8 @@ public:
                 i = 0;
             }
         }
-        state(State::Stopping);
-        state(State::Stopped);
+        state(State::PendingClosed);
+        state(State::Closed);
     }
 
     /// busy poll for events
@@ -209,7 +209,7 @@ public:
 
     /// wakeup, could be called from another thread
     void wakeup() noexcept  { 
-        if(state()==State::Started) {
+        if(state()==State::Open) {
             // wakeup last reactor since others are always busy-polled
             std::get<ImplsSize-1>(impls_).wakeup(); 
         }
