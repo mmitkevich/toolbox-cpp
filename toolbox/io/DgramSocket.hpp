@@ -93,7 +93,8 @@ public:
         self()->write_impl().endpoint(&endpoint);
         self()->write_impl().prepare(*self(), slot, buffer);
     }
-    void async_zc_sendto(std::size_t size, Slot<void*, std::size_t> mut, int flags, const Endpoint& endpoint, Slot<ssize_t, std::error_code> slot) {
+    template<class T>
+    void async_sendto(std::size_t size, Slot<T*, std::size_t> mut, int flags, const Endpoint& endpoint, Slot<ssize_t, std::error_code> slot) {
         assert(!self()->write_impl());
         self()->write_impl().flags(flags);
         self()->write_impl().endpoint(&endpoint);

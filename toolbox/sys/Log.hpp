@@ -100,7 +100,16 @@ class Log {
         /// Debug.
         Debug,
         /// Dump.
-        Dump
+        Dump,
+        Dump1,
+        Dump2,
+        Dump3,
+        Dump4,
+        Dump5,
+        Dump6,
+        Dump7,
+        Dump8,
+        Dump9
     };
 
     explicit Log(int level) noexcept
@@ -135,22 +144,31 @@ class Log {
 #  define TOOLBOX_LOG(LEVEL) toolbox::is_log_level(LEVEL) && toolbox::Log{LEVEL}
 #endif
 
+#define TOOLBOX_STRINGIFY_IMPL(x) #x
+#define TOOLBOX_STRINGIFY(x) TOOLBOX_STRINGIFY_IMPL(x)
+
+#define TOOLBOX_FILE_LINE __FILE__ ":" TOOLBOX_STRINGIFY(__LINE__) " " 
+//__FUNCTION__ ": "
+
 #define TOOLBOX_CRIT TOOLBOX_LOG(toolbox::Log::Crit)
 #define TOOLBOX_ERROR TOOLBOX_LOG(toolbox::Log::Error)
 #define TOOLBOX_WARNING TOOLBOX_LOG(toolbox::Log::Warning)
 #define TOOLBOX_NOTICE TOOLBOX_LOG(toolbox::Log::Notice)
-#define TOOLBOX_INFO TOOLBOX_LOG(toolbox::Log::Info)
+#define TOOLBOX_INFO TOOLBOX_LOG(toolbox::Log::Info) << TOOLBOX_FILE_LINE
+
 
 #if TOOLBOX_BUILD_DEBUG
-#  define TOOLBOX_DEBUG TOOLBOX_LOG(toolbox::Log::Debug)
-#  define TOOLBOX_DUMP TOOLBOX_LOG(toolbox::Log::Dump)
+#  define TOOLBOX_DEBUG TOOLBOX_LOG(toolbox::Log::Debug) << TOOLBOX_FILE_LINE
+#  define TOOLBOX_DUMP TOOLBOX_LOG(toolbox::Log::Dump) << TOOLBOX_FILE_LINE
+#  define TOOLBOX_DUMPV(n) TOOLBOX_LOG(toolbox::Log::Dump##n) << TOOLBOX_FILE_LINE
 #else
 #  define TOOLBOX_DEBUG false && toolbox::Log{toolbox::Log::Debug}
 #  define TOOLBOX_DUMP false && toolbox::Log{toolbox::Log::Dump}
+#  define TOOLBOX_DUMPV(n) false && toolbox::Log{toolbox::Log::Dump##n}
 #endif
 // clang-format on
-#define TOOLBOX_FILE_LINE __FILE__<<":"<<__LINE__<<" "<<__func__
-#define TOOLBOX_DUMP_THIS TOOLBOX_DUMP << TOOLBOX_FILE_LINE <<"() this="<<std::hex<<this<<std::dec<<" "
+
+#define TOOLBOX_DUMP_THIS TOOLBOX_DUMP << "this="<<std::hex<<this<<std::dec<<" "
 #define TOOLBOX_DUMP_NOT_IMPLEMENTED TOOLBOX_DUMP_THIS<<" not implemented!"
 #define TOOLBOX_ASSERT_NOT_IMPLEMENTED TOOLBOX_DUMP_NOT_IMPLEMENTED; assert(false)
 #endif // TOOLBOX_SYS_LOG_HPP

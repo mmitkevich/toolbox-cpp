@@ -78,7 +78,7 @@ inline pid_t gettid()
 
 const char* log_label(int level) noexcept
 {
-    return labels_[min<int>(max<int>(level, Log::Crit), Log::Debug)];
+    return labels_[min<int>(max<int>(level, Log::Crit), Log::Dump9)];
 }
 
 int get_log_level() noexcept

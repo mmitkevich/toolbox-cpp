@@ -326,7 +326,9 @@ public:
         self()->write_impl().prepare(*self(), slot,  buffer);
     }
 
-    void async_zc_write(std::size_t size, Slot<void*, std::size_t> mut, Slot<ssize_t, std::error_code> slot) {
+    /// zero copy write
+    template<class T>
+    void async_write(std::size_t size, Slot<T*, std::size_t> mut, Slot<ssize_t, std::error_code> slot) {
         self()->write_impl().flags(0);
         self()->write_impl().prepare(*self(), slot, size, mut);
     }
