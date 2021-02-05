@@ -4,20 +4,20 @@
 #include "toolbox/net/IpAddr.hpp"
 #include "toolbox/util/TypeTraits.hpp"
 #include <algorithm>
-#include <optional>
+#include "toolbox/optional.hpp"
 
 namespace toolbox { inline namespace net {
 
 struct EndpointFilter {
-    std::optional<toolbox::net::IpAddr> address;
-    std::optional<std::uint32_t> port;
+    tb::optional<toolbox::net::IpAddr> address;
+    tb::optional<std::uint32_t> port;
     
     template<typename EndpointT>
     TOOLBOX_ALWAYS_INLINE bool match(const EndpointT& ep) const {
         
-        if(port.has_value() && ep.port()!=port)
+        if(port.has_value() && ep.port()!=port.value())
             return false;
-        if(address.has_value() && ep.address()!=address)
+        if(address.has_value() && ep.address()!=address.value())
             return false;
         return true;
     }
@@ -82,7 +82,7 @@ struct TypeTraits<EndpointFilter> {
         }else {
             // full url, possibly with port
             IpEndpoint ep = TypeTraits<IpEndpoint>::from_string(s);
-            std::optional<std::uint32_t> port;
+            tb::optional<std::uint32_t> port;
             if(ep.port()!=0)
                 port = ep.port();
             return EndpointFilter {ep.address(), port };

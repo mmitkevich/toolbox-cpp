@@ -182,7 +182,7 @@ static_assert(parse_date("20180117") == 20180117_ymd);
 /// - MM = 00-59;
 /// - SS = 00-60 (60 only if UTC leap second);
 /// - sss = 000-999 (indicating milliseconds).
-constexpr toolbox::optional<WallTime> parse_time(std::string_view sv) noexcept
+toolbox::optional<WallTime> parse_time(std::string_view sv) noexcept
 {
     if (sv.size() < 8) {
         // Date part is too short.
@@ -209,7 +209,7 @@ constexpr toolbox::optional<WallTime> parse_time(std::string_view sv) noexcept
     }
     return dt;
 }
-static_assert(ms_since_epoch(*parse_time("20180824-05:32:29.123"sv)) == 1535088749123);
+//static_assert(ms_since_epoch(*parse_time("20180824-05:32:29.123"sv)) == 1535088749123);
 
 } // namespace sys
 } // namespace toolbox

@@ -232,7 +232,7 @@ inline bool ends_with(const std::basic_string_view<T, TraitsT> str, const std::b
 }
 
 template<typename T, typename TraitsT, typename AllocT>
-inline bool ends_with(const std::basic_string<T, TraitsT, AllocT>& str, const std::basic_string_view<T,TraitsT> match)
+inline bool ends_with(const std::basic_string<T, TraitsT, AllocT>& str, const std::basic_string<T,TraitsT, AllocT>& match)
 {
     return str.size() >= match.size() &&
             str.compare(str.size() - match.size(), match.size(), match) == 0;

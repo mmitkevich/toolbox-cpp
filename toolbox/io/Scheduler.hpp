@@ -100,7 +100,9 @@ public:
 
     auto& state_changed() noexcept { return state_changed_; }
     State state() const noexcept { return state_; }
-    void state(State val) noexcept { state_.store(val, std::memory_order_release); state_changed().invoke(this, val); }
+    void state(State val) noexcept { 
+        state_.store(val, std::memory_order_release); 
+        state_changed().invoke(this, val); }
 
 protected:
     static_assert(static_cast<int>(Priority::High) == 0);

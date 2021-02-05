@@ -400,7 +400,7 @@ static_assert(parse_nanos("000000001") == 1ns);
 /// bandwidth-sensitive messages. Valid values: HH = 00-23, MM = 00-59, SS = 00-5960 (60 only if UTC
 /// leap second) (without milliseconds). HH = 00-23, MM = 00-59, SS = 00-5960 (60 only if UTC leap
 /// second), sss=000-999 (indicating milliseconds).
-constexpr toolbox::optional<Nanos> parse_time_only(std::string_view sv) noexcept
+inline /*constexpr*/toolbox::optional<Nanos> parse_time_only(std::string_view sv) noexcept
 {
     using namespace std::chrono;
 
@@ -431,7 +431,7 @@ constexpr toolbox::optional<Nanos> parse_time_only(std::string_view sv) noexcept
     }
     return ns;
 }
-static_assert(*parse_time_only("12:00:00"sv) == 12h);
+//static_assert(*parse_time_only("12:00:00"sv) == 12h);
 
 } // namespace sys
 inline namespace util {

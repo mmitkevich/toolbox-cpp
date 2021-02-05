@@ -227,11 +227,13 @@ public:
     void disconnect_all() {
         slots_.clear();
     }
+
     TOOLBOX_ALWAYS_INLINE void invoke(ArgsT... args) const { 
         for(auto& slot: slots_) {
             slot(std::forward<ArgsT>(args)...);
         }
     }
+
     TOOLBOX_ALWAYS_INLINE void operator()(ArgsT... args) const { 
         for(auto& slot: slots_) {
             slot(std::forward<ArgsT>(args)...);

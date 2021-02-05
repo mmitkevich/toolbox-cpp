@@ -87,7 +87,7 @@ inline PcapPacket::PcapPacket(const pcap_pkthdr* pkthdr, const u_char* packet)
 
 inline std::size_t PcapPacket::len() const
 {
-    return pkthdr->len;
+    return pkthdr->caplen; // len is onwire, caplen could be less 
 }
 
 inline const PcapPacket& PcapBuffer::self() const {

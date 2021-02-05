@@ -35,7 +35,8 @@ TOOLBOX_API int get_log_level() noexcept;
 /// Return true if level is less than or equal to current log level.
 inline bool is_log_level(int level) noexcept
 {
-    return level <= get_log_level();
+    auto log_level = get_log_level();; 
+    return level <= log_level;
 }
 
 /// Set log level globally for all threads.

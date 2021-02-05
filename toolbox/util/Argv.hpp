@@ -71,8 +71,8 @@ class TOOLBOX_API ArgvLexer {
     ~ArgvLexer();
 
     // Copy.
-    ArgvLexer(const ArgvLexer&) noexcept = default;
-    ArgvLexer& operator=(const ArgvLexer&) noexcept = default;
+    ArgvLexer(const ArgvLexer&) = default;
+    ArgvLexer& operator=(const ArgvLexer&) = default;
 
     // Move.
     ArgvLexer(ArgvLexer&&) noexcept = default;

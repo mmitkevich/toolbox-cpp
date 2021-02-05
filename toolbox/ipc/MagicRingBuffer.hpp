@@ -37,7 +37,7 @@ inline namespace ipc {
 /// MagicRingBuffer is a SPSC queue suitable for variable length messages
 class MagicRingBuffer {
   public:
-    struct alignas(CacheLineSize) Impl {
+    struct /*alignas(CacheLineSize) -- FIXME clang*/ Impl {
         std::atomic<std::int64_t> rpos;
         alignas(CacheLineSize) std::atomic<std::int64_t> wpos;
         alignas(PageSize) char buf[];

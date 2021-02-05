@@ -55,8 +55,7 @@ class McastSocket: public BasicMcastSocket<McastSocket<McastSockT, StateT>, Mcas
     using typename Base::SocketOpen, typename Base::SocketRead, typename Base::SocketWrite;
   public:
     using Base::Base;
-  protected:
-    friend Base; friend class Base::Base; friend class Base::Base::Base;
+
     SocketOpen& open_impl() { return open_impl_; }
     SocketRead& read_impl() { return read_impl_; }
     SocketWrite& write_impl() { return write_impl_; }

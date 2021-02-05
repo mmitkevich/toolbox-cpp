@@ -109,9 +109,6 @@ class DgramSocket : public BasicDgramSocket<DgramSocket<DgramSockT, StateT>, Dgr
     using typename Base::SocketRead, typename Base::SocketWrite, typename Base::SocketOpen;
   public:
     using Base::Base;
-  protected:
-    friend Base;
-    friend typename Base::Base;
     SocketOpen& open_impl() { return open_impl_; }
     SocketRead& read_impl() { return read_impl_; }
     SocketWrite& write_impl() { return write_impl_; }

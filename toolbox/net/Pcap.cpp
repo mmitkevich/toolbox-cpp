@@ -1,5 +1,6 @@
 #include "toolbox/net/Pcap.ipp"
 
+#include <sstream>
 #include <stdexcept>
 #include <cassert>
 
@@ -9,8 +10,12 @@ using namespace toolbox::net;
 void PcapDevice::open()
 {
     char errbuf[PCAP_ERRBUF_SIZE];
-    handle_ = pcap_open_offline(input_.data(), errbuf);
-    assert(handle_!=nullptr);
+    if(use_filter()) {
+        file_ = popen((filter_ + input_).c_str(), "r");
+    } else {
+        file_ = fopen(input_.c_str(), "rb");
+    }
+    handle_ = pcap_fopen_offline(file_, errbuf);
     if(!handle_) {
         throw std::runtime_error(errbuf);
     }
@@ -20,6 +25,13 @@ void PcapDevice::close()
 {
     if(handle_!=nullptr)
         pcap_close(handle_);
+    /*if(use_filter()) {
+        if(filter_.size()>0) {
+            pclose(file_);
+        }else {
+            fclose(file_);
+        }
+    }*/
     handle_ = nullptr;
 }
 

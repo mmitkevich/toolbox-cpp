@@ -47,11 +47,11 @@ using ElementType = simdjson::dom::element_type;
 struct Key {
     constexpr Key(const char* data, std::size_t size) : data_(data), size_(size) {}
     constexpr explicit Key(std::string_view val) : data_(val.data()), size_(val.size()) {}
-    constexpr explicit Key(const char* data) : data_(data), size_(std::strlen(data)) {}
+    explicit Key(const char* data) : data_(data), size_(std::strlen(data)) {}
     explicit constexpr operator const char*() const { return data_; } 
     explicit constexpr operator std::string_view() const { return std::string_view(data_, size_); }
     constexpr bool operator==(const char* rhs) const { return data_ == rhs || !std::strcmp(data_, rhs); }
-    constexpr bool operator==(const Key& rhs) const { return data_ == rhs.data_ || (size_==rhs.size_ && !std::strcmp(data_, rhs.data_)); }
+    bool operator==(const Key& rhs) const { return data_ == rhs.data_ || (size_==rhs.size_ && !std::strcmp(data_, rhs.data_)); }
     constexpr std::size_t size() const { return size_; }
     constexpr const char* data() const { return data_;}
 private:
@@ -90,7 +90,7 @@ public:
     {}
 public:
     struct const_iterator {
-        explicit const_iterator(const MutableElement*e)
+        const_iterator(const MutableElement*e)
         :e(e) {}
         const_iterator operator++() {
             auto result =  const_iterator(e);
@@ -105,7 +105,7 @@ public:
         const MutableElement* e;
     };
     struct iterator {
-        explicit iterator(MutableElement*e)
+        iterator(MutableElement*e)
         :e(e) {}
         iterator operator++() {
             auto result =  iterator(e);
@@ -152,7 +152,7 @@ public:
     }        
     bool is_null() const noexcept { return element_type_ == element_type::NULL_VALUE; }
 
-    std::string to_string() {
+    std::string to_string() const {
         switch(element_type_) {
             case element_type::STRING:
                 return std::string(value_.str_, size_);
@@ -199,7 +199,7 @@ public:
                 if(size()!=rhs.size())
                     return false;
                 for(auto e: *this) {
-                    if(rhs.find(e.key()) == iterator(nullptr) || e!=rhs[e.key()])
+                    if(rhs.find(e.key()) == nullptr || e!=rhs[e.key()])
                         return false;
                 }
                 return true;                
@@ -211,7 +211,8 @@ public:
         return !operator==(rhs);
     }
     void clear();
-    iterator find(std::string_view key) const;
+    iterator find(std::string_view key);
+    const_iterator find(std::string_view key) const;
     iterator find(std::size_t key) const;
     template<typename T>
     const_iterator find_value(const T& val) const {
@@ -222,7 +223,7 @@ public:
                     return const_iterator(&e);
             }
         }
-        return const_iterator(nullptr);
+        return nullptr;
     }
     iterator erase(iterator it);
     iterator erase(std::string_view key) {
@@ -282,27 +283,31 @@ public:
     bool copy(MapT &result) const {
         if(element_type_!=element_type::OBJECT)
             return false;
+       /* FIXME CLANG 6 does not compile this: 
         for(auto [k, v]: *this) {
             result[k] = v;
+        } */
+        for(auto it = begin(); it!=end(); it++) {
+            result[it->key()] = *it;
         }
         return true;
     }
     
     const_iterator begin() const {
         if(!is_array() && !is_object())
-            return const_iterator(nullptr);
-        return const_iterator(value_.child_);
+            return nullptr;
+        return value_.child_;
     }
     const_iterator end() const {
-        return const_iterator(nullptr);
+        return nullptr;
     }
     iterator begin() {
         if(!is_array() && !is_object())
-            return iterator(nullptr);
-        return iterator(value_.child_);
+            return nullptr;
+        return value_.child_;
     }
     iterator end() {
-        return iterator(nullptr);
+        return nullptr;
     }
     operator std::pair<const char*, const MutableElement&>() const {
         return std::make_pair(key_,*this);
@@ -452,14 +457,14 @@ public:
     void key(std::string_view key) { assert(document_==nullptr); key_ = key.data();}
     
     template<std::size_t I>
-    auto get() {
+    auto get() const {
         if      constexpr(I == 0) return key();
         else if constexpr(I == 1) return *this;
     }
 
     /// conversion via string serialization
     template<typename T>
-    T get() {
+    T get() const  {
         return TypeTraits<T>::from_string(to_string());
     }
 
@@ -476,7 +481,7 @@ public:
         {
             case ElementType::OBJECT: {
                 auto it = find(key);
-                return it==iterator(nullptr) ? dflt : it->get<T>();
+                return it==nullptr ? dflt : it->get<T>();
             }
             case ElementType::ARRAY: {
                 int index = std::atoi(key.data());
@@ -492,7 +497,7 @@ public:
     template<typename T>
     T value(std::string_view key) const noexcept(false) {
         auto it = find(key);
-        if(it==iterator(nullptr)) {
+        if(it==nullptr) {
             std::stringstream ss;
             ss << "'"<<key<<"' not found";
             throw JsonError(ss.str());
@@ -500,6 +505,30 @@ public:
         return it->get<T>();
     }
     
+    std::string_view strv(std::string_view key) const noexcept(false) {
+        return value<std::string_view>(key);
+    }
+    std::string_view strv(std::string_view key, std::string_view dflt) const noexcept(false) {
+        return value_or(key, dflt);
+    }
+    std::string str(std::string_view key) const noexcept(false) {
+        return std::string{strv(key)};
+    }
+    std::string str(std::string_view key, std::string dflt) const noexcept(false) {
+        return value_or(key, dflt);
+    }
+    uint64_t uint64(std::string_view key) const noexcept(false) {
+        return value<uint64_t>(key);
+    }
+    int64_t int64(std::string_view key) const noexcept(false) {
+        return value<int64_t>(key);
+    }
+    bool lgl(std::string_view key) const noexcept(false) {
+        return value<bool>(key);
+    }
+    bool lgl(std::string_view key, bool dflt) const noexcept(false) {
+        return value_or(key, dflt);
+    }    
     template<typename ElementT>
     static inline void copy(const ElementT& ve, MutableElement& result);
 
@@ -553,23 +582,23 @@ private:
 };
 
 template<>
-inline std::string_view MutableElement::get() {
+inline std::string_view MutableElement::get() const  {
     return get_string();
 }
 template<>
-inline std::string MutableElement::get() {
+inline std::string MutableElement::get() const {
     return std::string(get_string());
 }
 template<>
-inline std::uint64_t MutableElement::get() {
+inline std::uint64_t MutableElement::get() const {
     return get_uint64();
 }
 template<>
-inline std::int64_t MutableElement::get() {
+inline std::int64_t MutableElement::get() const {
     return get_int64();
 }
 template<>
-inline bool MutableElement::get() {
+inline bool MutableElement::get() const {
     return get_bool();
 }
 
@@ -771,7 +800,7 @@ inline MutableElement::iterator MutableElement::insert_after(iterator it, const 
     size_++;
     return iterator(e);
 }
-inline MutableElement::iterator MutableElement::find(std::string_view key) const {
+inline MutableElement::iterator MutableElement::find(std::string_view key) {
     assert_type(element_type::OBJECT);
     iterator end(nullptr);
     for(iterator it(value_.child_); it!=end; it++)
@@ -779,7 +808,14 @@ inline MutableElement::iterator MutableElement::find(std::string_view key) const
             return it;
     return iterator(nullptr);
 }
-
+inline MutableElement::const_iterator MutableElement::find(std::string_view key) const {
+    assert_type(element_type::OBJECT);
+    const_iterator end(nullptr);
+    for(const_iterator it(value_.child_); it!=end; it++)
+        if(it->key() == key)
+            return it;
+    return const_iterator(nullptr);
+}
 inline MutableElement::iterator MutableElement::find(std::size_t index) const {
     assert_type(element_type::ARRAY);
     iterator end(nullptr);

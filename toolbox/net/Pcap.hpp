@@ -138,12 +138,15 @@ public:
     }
     void max_packet_count(int val) { max_packet_count_ = val; }
     tbu::Signal<const PcapPacket&>& packets() { return packets_; }
+    bool use_filter() const { return toolbox::util::ends_with(input_, std::string(".tgz"));}
 private:
     static void pcap_packet_handler(u_char *userData, const struct pcap_pkthdr* pkthdr, const u_char* packet);
 private:
     pcap_t* handle_{nullptr};
     int max_packet_count_{0};
     std::string input_;
+    std::string filter_ = "tar -xOzf ";
+    FILE* file_{};
     tbu::Signal<const PcapPacket&> packets_;
 };
 

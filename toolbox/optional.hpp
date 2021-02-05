@@ -7,9 +7,9 @@ namespace toolbox {
     using optional = tl::optional<T>;
 }
 #else
-#include <optional>
+#include <boost/optional.hpp>
 namespace toolbox {
     template<typename T>
-    using optional = std::optional<T>;
+    using optional = boost::optional<T>;
 }
 #endif

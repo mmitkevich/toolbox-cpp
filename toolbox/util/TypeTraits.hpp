@@ -21,6 +21,7 @@
 
 #include <string>
 #include <toolbox/optional.hpp>
+//#include <boost/callable_traits/is_invocable.hpp>
 
 namespace toolbox {
 inline namespace util {
@@ -84,6 +85,17 @@ struct TypeTraits<toolbox::optional<T>> {
     static toolbox::optional<T> from_string(std::string_view sv) noexcept { return TypeTraits<T>::from_string(sv); }
     static toolbox::optional<T> from_string(const std::string& s) noexcept { return TypeTraits<T>::from_string(s); }
 };
+
+// type cointainer
+template<typename T>
+struct type_c {
+    using type = T;
+};
+template<class TestFn, class TypeC> 
+constexpr bool is_valid(TestFn cond, TypeC obj) {
+    return std::is_invocable<TestFn, typename std::decay_t<TypeC>::type>::value;
+};
+#define TB_IS_VALID(obj, expr) tb::is_valid([](auto&& obj)->decltype(expr){return {};}, tb::type_c<decltype(obj)>{})
 
 
 } // namespace util

@@ -35,15 +35,14 @@ struct ThreadConfig {
     : name{std::move(name)}
     {
     }
-    ThreadConfig() noexcept = default;
-
+    ThreadConfig()  = default;
     // Copy.
     ThreadConfig(const ThreadConfig&) = default;
     ThreadConfig& operator=(const ThreadConfig&) = default;
 
     // Move.
-    ThreadConfig(ThreadConfig&&) noexcept = default;
-    ThreadConfig& operator=(ThreadConfig&&) noexcept = default;
+    ThreadConfig(ThreadConfig&&)  = default;
+    ThreadConfig& operator=(ThreadConfig&&)  = default;
 
     /// The thread's name.
     std::string name;
