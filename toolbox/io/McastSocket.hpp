@@ -17,13 +17,13 @@
 #pragma once
 
 #include "toolbox/io/Buffer.hpp"
-#include "toolbox/io/PollHandle.hpp"
+#include "toolbox/io/Reactor.hpp"
 #include "toolbox/net/DgramSock.hpp"
 #include "toolbox/sys/Error.hpp"
 #include <exception>
 #include <system_error>
 #include <toolbox/io/Event.hpp>
-#include <toolbox/io/Reactor.hpp>
+#include <toolbox/io/MultiReactor.hpp>
 #include <toolbox/io/DgramSocket.hpp>
 #include <toolbox/net/McastSock.hpp>
 #include <toolbox/io/Socket.hpp>
@@ -32,12 +32,11 @@ namespace toolbox {
 inline namespace io {
 
 
-template<typename DerivedT, typename SockT, typename StateT>
-class BasicMcastSocket : public BasicDgramSocket<
-  DerivedT, SockT, StateT>
+template<typename DerivedT, typename SockT>
+class BasicMcastSocket : public BasicDgramSocket<DerivedT, SockT>
 {
-    using This = BasicMcastSocket<DerivedT, SockT, StateT>;
-    using Base = BasicDgramSocket<DerivedT, SockT, StateT>;
+    using This = BasicMcastSocket<DerivedT, SockT>;
+    using Base = BasicDgramSocket<DerivedT, SockT>;
   public:
     using typename Base::Sock, typename Base::PollHandle;
     using typename Base::Protocol, typename Base::Endpoint;
@@ -49,9 +48,9 @@ class BasicMcastSocket : public BasicDgramSocket<
     using Base::join_group, Base::leave_group;
 };
 
-template<class McastSockT=McastSock, typename StateT=io::SocketState>
-class McastSocket: public BasicMcastSocket<McastSocket<McastSockT, StateT>, McastSockT, StateT> {
-    using Base=BasicMcastSocket<McastSocket, McastSock, io::SocketState>;
+template<class McastSockT=McastSock>
+class McastSocket: public BasicMcastSocket<McastSocket<McastSockT>, McastSockT> {
+    using Base = BasicMcastSocket<McastSocket<McastSockT>, McastSockT>;
     using typename Base::SocketOpen, typename Base::SocketRead, typename Base::SocketWrite;
   public:
     using Base::Base;

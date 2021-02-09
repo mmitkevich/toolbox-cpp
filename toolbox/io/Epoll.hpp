@@ -24,7 +24,7 @@
 #include <toolbox/sys/Error.hpp>
 #include <toolbox/util/Slot.hpp>
 #include <toolbox/io/EventFd.hpp>
-#include <toolbox/io/PollHandle.hpp>
+#include <toolbox/io/Reactor.hpp>
 #include <toolbox/sys/Log.hpp>
 #include <sys/epoll.h>
 
@@ -74,7 +74,7 @@ inline FileHandle epoll_create1(int flags)
 }
 
 /// Control interface for an epoll file descriptor.
-inline int epoll_ctl(int epfd, int op, FD fd, epoll_event event, std::error_code& ec) noexcept
+inline int epoll_ctl(int epfd, int op, int fd, epoll_event event, std::error_code& ec) noexcept
 {
     const auto ret = ::epoll_ctl(epfd, op, fd, &event);
     if (ret < 0) {
@@ -84,7 +84,7 @@ inline int epoll_ctl(int epfd, int op, FD fd, epoll_event event, std::error_code
 }
 
 /// Control interface for an epoll file descriptor.
-inline void epoll_ctl(int epfd, int op, FD fd, epoll_event event)
+inline void epoll_ctl(int epfd, int op, int fd, epoll_event event)
 {
     const auto ret = ::epoll_ctl(epfd, op, fd, &event);
     if (ret < 0) {
@@ -161,18 +161,17 @@ enum : unsigned {
 using EpollEvent = epoll_event;
 
 /// This is Epoll reactor implementation
-class TOOLBOX_API Epoll {
+class TOOLBOX_API Epoll : virtual public IPoller {
   public:
     using Event = EpollEvent;
     using This = Epoll;
     static constexpr std::size_t MaxEvents{128};
-    using FD = typename FileHandle::FD;
     
     using Handle = PollHandle;
 
-    static constexpr FD fd(const Event& ev) noexcept
+    static constexpr int fd(const Event& ev) noexcept
     {
-        return static_cast<FD>(ev.data.u64 & 0xffffffff);
+        return static_cast<int>(ev.data.u64 & 0xffffffff);
     }
     static constexpr int sid(const Event& ev) noexcept
     {
@@ -254,7 +253,7 @@ class TOOLBOX_API Epoll {
     }
 
     /// modifies subscription
-    bool ctl(PollHandle& handle);
+    bool ctl(PollHandle& handle) override;
 
     int socket() {
         throw std::runtime_error("not implemented");
@@ -266,7 +265,7 @@ class TOOLBOX_API Epoll {
         for (std::size_t i = 0; i < ready_; ++i) {
 
             auto& ev = events_[i];
-            const FD fd = Epoll::fd(ev);
+            const int fd = Epoll::fd(ev);
             if (fd == notify_.fd()) {
                 notify_.read();
                 continue;
@@ -313,14 +312,14 @@ class TOOLBOX_API Epoll {
     }
     bool constexpr is_et_mode() const { return epoll_mode_ == EpollEt; }
 private:
-    void add(FD fd, int sid, PollEvents events)
+    void add(int fd, int sid, PollEvents events)
     {
         Event ev;
         mod(ev, fd, sid, events);
         TOOLBOX_DUMP<<"epoll_ctl_add fd="<<fd<<" ev="<<std::hex<<(unsigned)ev.events<<std::dec;
         os::epoll_ctl(*epfd_, EPOLL_CTL_ADD, fd, ev);
     }
-    void del(FD fd)
+    void del(int fd)
     {
         // In kernel versions before 2.6.9, the EPOLL_CTL_DEL operation required a non-null pointer
         // in event, even though this argument is ignored.
@@ -329,7 +328,7 @@ private:
         os::epoll_ctl(*epfd_, EPOLL_CTL_DEL, fd, ev);
     }
     /// throws system_error
-    void mod(FD fd, int sid, PollEvents events)
+    void mod(int fd, int sid, PollEvents events)
     {
         Event ev;
         mod(ev, fd, sid, events);
@@ -358,7 +357,7 @@ private:
             result = (PollEvents)(result|PollEvents::Error);
         return result;
     }
-    void mod(Event& ev, FD fd, int sid, PollEvents events) noexcept
+    void mod(Event& ev, int fd, int sid, PollEvents events) noexcept
     {
         auto epoll_events = to_epoll_events(events); 
         auto u64 = static_cast<std::uint64_t>(sid) << 32 | fd;

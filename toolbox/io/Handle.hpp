@@ -25,24 +25,17 @@
 #include <toolbox/util/Slot.hpp>
 
 namespace toolbox {
-namespace os {
-    using FD = int;
-}
-}
-
-namespace toolbox {
 inline namespace io {
 
 template <typename PolicyT>
 class BasicHandle {
   public:
-    using FD = typename PolicyT::FD;
-    using value_type = FD;
+    using value_type = int;
 
-    static constexpr FD invalid() noexcept { return PolicyT::invalid(); }
+    static constexpr int invalid() noexcept { return PolicyT::invalid(); }
 
     constexpr BasicHandle(std::nullptr_t = nullptr) noexcept {}
-    constexpr BasicHandle(FD id) noexcept
+    constexpr BasicHandle(int id) noexcept
     : id_{id}
     {
     }
@@ -73,19 +66,19 @@ class BasicHandle {
     constexpr bool empty() const noexcept { return id_ == invalid(); }
     constexpr explicit operator bool() const noexcept { return id_ != invalid(); }
 
-    constexpr FD get() const noexcept { return id_; }
-    constexpr FD operator*() const noexcept { return get(); }
+    constexpr int get() const noexcept { return id_; }
+    constexpr int operator*() const noexcept { return get(); }
 
     constexpr bool is_custom() const noexcept { return PolicyT::is_custom(id_); }
 
-    FD release() noexcept
+    int release() noexcept
     {
         const auto id = id_;
         id_ = invalid();
         return id;
     }
     void reset(std::nullptr_t p = nullptr) noexcept { reset(invalid()); }
-    void reset(FD id) noexcept
+    void reset(int id) noexcept
     {
         std::swap(id_, id);
         if (id != invalid()) {
@@ -94,8 +87,8 @@ class BasicHandle {
     }
     void swap(BasicHandle& rhs) noexcept { std::swap(id_, rhs.id_); }
 
-  private:
-    FD id_{invalid()};
+  protected:
+    int id_{invalid()};
 };
 
 template <typename PolicyT>
@@ -112,10 +105,9 @@ constexpr bool operator!=(const BasicHandle<PolicyT>& lhs, const BasicHandle<Pol
 
 
 struct FilePolicy {
-    using FD = toolbox::os::FD;
-    static constexpr bool is_custom(FD fd) { return fd<0; }
+    static constexpr bool is_custom(int fd) { return fd<0; }
     static constexpr int invalid() noexcept { return -1; }
-    static void close(int d) noexcept { ::close(d); }
+    static void close(int fd) noexcept { ::close(fd); }
 };
 
 using FileHandle = BasicHandle<FilePolicy>;

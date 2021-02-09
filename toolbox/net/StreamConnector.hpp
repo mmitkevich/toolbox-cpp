@@ -18,7 +18,7 @@
 #define TOOLBOX_NET_STREAMCONNECTOR_HPP
 
 #include <toolbox/io/Event.hpp>
-#include <toolbox/io/Reactor.hpp>
+#include <toolbox/io/MultiReactor.hpp>
 #include <toolbox/net/StreamSock.hpp>
 
 namespace toolbox {
@@ -67,7 +67,7 @@ class StreamConnector {
             if (ec.value() != EINPROGRESS) {
                 throw std::system_error{ec, "connect"};
             }
-            sub_ = PollHandle{*sock, r.ctl(*sock)};
+            sub_ = r.handle(*sock);
             sub_.add(PollEvents::Read + PollEvents::Write, bind<&StreamConnector::on_io_event>(this));
             ep_ = ep;
             sock_ = std::move(sock);
@@ -81,7 +81,7 @@ class StreamConnector {
     ~StreamConnector() = default;
 
   private:
-    void on_io_event(CyclTime now, os::FD fd, PollEvents events)
+    void on_io_event(CyclTime now, int fd, PollEvents events)
     {
         IoSock sock{std::move(sock_)};
         sub_.reset();

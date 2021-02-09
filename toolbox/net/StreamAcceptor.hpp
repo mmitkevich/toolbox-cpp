@@ -19,7 +19,7 @@
 
 #include "toolbox/io/Handle.hpp"
 #include <toolbox/io/Event.hpp>
-#include <toolbox/io/Reactor.hpp>
+#include <toolbox/io/MultiReactor.hpp>
 #include <toolbox/net/StreamSock.hpp>
 
 namespace toolbox {
@@ -33,7 +33,7 @@ class StreamAcceptor {
 
     StreamAcceptor(Reactor& r, const Endpoint& ep)
     : serv_{ep.protocol()}
-    , sub_{serv_.get(), r.ctl(serv_.get())}
+    , sub_{serv_.get(), r.poller(serv_.get())}
     {
         serv_.set_reuse_addr(true);
         serv_.bind(ep);
@@ -55,7 +55,7 @@ class StreamAcceptor {
   void on_sock_prepare(CyclTime now, IoSock& sock) {};
   void on_sock_accept(CyclTime now, IoSock&& sock, Endpoint& endpoint) {};
 protected:
-    void on_io_event(CyclTime now, os::FD fd, PollEvents events)
+    void on_io_event(CyclTime now, int fd, PollEvents events)
     {
         Endpoint ep;
         IoSock sock{os::accept(fd, ep), serv_.family()};
@@ -68,7 +68,7 @@ protected:
     }
 protected:
     StreamSockServ serv_;
-    Reactor::Handle sub_;
+    PollHandle sub_;
 };
 
 } // namespace net

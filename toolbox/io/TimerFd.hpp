@@ -46,7 +46,7 @@ inline FileHandle timerfd_create(int clock_id, int flags)
 }
 
 /// Arm or disarm timer.
-inline void timerfd_settime(FD fd, int flags, const itimerspec& new_value, itimerspec& old_value,
+inline void timerfd_settime(int fd, int flags, const itimerspec& new_value, itimerspec& old_value,
                             std::error_code& ec) noexcept
 {
     const auto ret = ::timerfd_settime(fd, flags, &new_value, &old_value);
@@ -56,7 +56,7 @@ inline void timerfd_settime(FD fd, int flags, const itimerspec& new_value, itime
 }
 
 /// Arm or disarm timer.
-inline void timerfd_settime(FD fd, int flags, const itimerspec& new_value, itimerspec& old_value)
+inline void timerfd_settime(int fd, int flags, const itimerspec& new_value, itimerspec& old_value)
 {
     const auto ret = ::timerfd_settime(fd, flags, &new_value, &old_value);
     if (ret < 0) {
@@ -65,7 +65,7 @@ inline void timerfd_settime(FD fd, int flags, const itimerspec& new_value, itime
 }
 
 /// Arm or disarm timer.
-inline void timerfd_settime(FD fd, int flags, const itimerspec& new_value,
+inline void timerfd_settime(int fd, int flags, const itimerspec& new_value,
                             std::error_code& ec) noexcept
 {
     const auto ret = ::timerfd_settime(fd, flags, &new_value, nullptr);
@@ -75,7 +75,7 @@ inline void timerfd_settime(FD fd, int flags, const itimerspec& new_value,
 }
 
 /// Arm or disarm timer.
-inline void timerfd_settime(FD fd, int flags, const itimerspec& new_value)
+inline void timerfd_settime(int fd, int flags, const itimerspec& new_value)
 {
     const auto ret = ::timerfd_settime(fd, flags, &new_value, nullptr);
     if (ret < 0) {
@@ -85,7 +85,7 @@ inline void timerfd_settime(FD fd, int flags, const itimerspec& new_value)
 
 /// Arm or disarm timer.
 template <typename ClockT>
-inline void timerfd_settime(FD fd, int flags, std::chrono::time_point<ClockT, Duration> expiry,
+inline void timerfd_settime(int fd, int flags, std::chrono::time_point<ClockT, Duration> expiry,
                             Duration interval, std::error_code& ec) noexcept
 {
     return timerfd_settime(fd, flags | TFD_TIMER_ABSTIME,
@@ -94,7 +94,7 @@ inline void timerfd_settime(FD fd, int flags, std::chrono::time_point<ClockT, Du
 
 /// Arm or disarm timer.
 template <typename ClockT>
-inline void timerfd_settime(FD fd, int flags, std::chrono::time_point<ClockT, Duration> expiry,
+inline void timerfd_settime(int fd, int flags, std::chrono::time_point<ClockT, Duration> expiry,
                             Duration interval)
 {
     return timerfd_settime(fd, flags | TFD_TIMER_ABSTIME,
@@ -103,7 +103,7 @@ inline void timerfd_settime(FD fd, int flags, std::chrono::time_point<ClockT, Du
 
 /// Arm or disarm timer.
 template <typename ClockT>
-inline void timerfd_settime(FD fd, int flags, std::chrono::time_point<ClockT, Duration> expiry,
+inline void timerfd_settime(int fd, int flags, std::chrono::time_point<ClockT, Duration> expiry,
                             std::error_code& ec) noexcept
 {
     return timerfd_settime(fd, flags | TFD_TIMER_ABSTIME, {{}, to_timespec(expiry)}, ec);
@@ -111,7 +111,7 @@ inline void timerfd_settime(FD fd, int flags, std::chrono::time_point<ClockT, Du
 
 /// Arm or disarm timer.
 template <typename ClockT>
-inline void timerfd_settime(FD fd, int flags, std::chrono::time_point<ClockT, Duration> expiry)
+inline void timerfd_settime(int fd, int flags, std::chrono::time_point<ClockT, Duration> expiry)
 {
     return timerfd_settime(fd, flags | TFD_TIMER_ABSTIME, {{}, to_timespec(expiry)});
 }
@@ -124,7 +124,6 @@ class TimerFd {
   public:
     using Clock = ClockT;
     using TimePoint = std::chrono::time_point<ClockT, Duration>;
-    using FD = typename FileHandle::FD;
 
     explicit TimerFd(int flags)
     : fh_{os::timerfd_create(Clock::Id, flags)}
@@ -140,7 +139,7 @@ class TimerFd {
     TimerFd(TimerFd&&) = default;
     TimerFd& operator=(TimerFd&&) = default;
 
-    FD fd() const noexcept { return fh_.get(); }
+    int fd() const noexcept { return fh_.get(); }
 
     void set_time(int flags, TimePoint expiry, Duration interval, std::error_code& ec) noexcept
     {

@@ -18,7 +18,7 @@
 
 #include "Resolver.hpp"
 
-#include <toolbox/io/Reactor.hpp>
+#include <toolbox/io/MultiReactor.hpp>
 
 #include <toolbox/sys/Log.hpp>
 #include <toolbox/sys/Signal.hpp>

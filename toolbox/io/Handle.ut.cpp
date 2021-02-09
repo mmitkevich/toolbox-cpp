@@ -27,7 +27,7 @@ namespace {
 int last_closed{};
 
 struct TestPolicy {
-    using FD = int;
+
     static constexpr int invalid() noexcept { return -1; }
     static void close(int id) noexcept { last_closed = id; }
 };

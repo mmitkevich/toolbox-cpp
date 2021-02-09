@@ -41,6 +41,11 @@ struct DgramSock : IoSock {
     }
     DgramSock() noexcept = default;
 
+    void open(Protocol protocol) {
+        DgramSock rhs(protocol);
+        swap(rhs);
+    }
+
     // Logically const.
     void get_sock_name(Endpoint& ep, std::error_code& ec) noexcept { os::getsockname(get(), ep, ec); }
     void get_sock_name(Endpoint& ep) { os::getsockname(get(), ep); }

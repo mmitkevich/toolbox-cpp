@@ -1,13 +1,13 @@
 #pragma once
 
-#include "toolbox/io/PollHandle.hpp"
+#include "toolbox/io/Reactor.hpp"
 #include <toolbox/ipc/MagicRingBuffer.hpp>
 
 namespace toolbox {
 inline namespace io {
 
 template<typename QueueT> 
-class BasicQueuePoll {
+class BasicQueuePoll : virtual public IPoller {
 public:
     bool open(PollHandle& handle) {
         auto ix = static_cast<std::size_t>(handle.fd());
@@ -45,6 +45,9 @@ public:
     }
     int dispatch(CyclTime now) {
         return 0;   
+    }
+    bool ctl(PollHandle& handle) override {
+        return true; //FIXME
     }
 private:
     std::vector<PollFD> data_;

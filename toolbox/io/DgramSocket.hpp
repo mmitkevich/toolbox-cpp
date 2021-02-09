@@ -5,11 +5,11 @@
 
 namespace toolbox { inline namespace io {
 
-template<typename Self, typename SockT, typename StateT>
-class BasicDgramSocket : public BasicSocket< Self, SockT, StateT>
+template<typename Self, typename SockT>
+class BasicDgramSocket : public BasicSocket< Self, SockT>
 {
-    using This = BasicDgramSocket<Self, SockT, StateT>;
-    using Base = BasicSocket<Self, SockT, StateT>;
+    using This = BasicDgramSocket<Self, SockT>;
+    using Base = BasicSocket<Self, SockT>;
     Self* self() { return static_cast<Self*>(this); } 
 public:
     using typename Base::Endpoint;
@@ -22,7 +22,7 @@ public:
     
     using typename Base::SocketOpen;
     class SocketRead: public Base::SocketRead { 
-        using Base = typename BasicSocket<Self, SockT, StateT>::SocketRead;
+        using Base = typename BasicSocket<Self, SockT>::SocketRead;
     public:
         using Base::empty, Base::notify;
         using typename Base::Slot;
@@ -46,7 +46,7 @@ public:
         }
     };
     class SocketWrite: public Base::SocketWrite { 
-        using Base = typename BasicSocket<Self, SockT, StateT>::SocketWrite;
+        using Base = typename BasicSocket<Self, SockT>::SocketWrite;
     public:
         using Base::prepare, Base::empty, Base::notify;
         using typename Base::Slot;
@@ -103,9 +103,9 @@ public:
 };
 
 /// crtp final
-template<class DgramSockT=net::DgramSock, typename StateT=io::SocketState>
-class DgramSocket : public BasicDgramSocket<DgramSocket<DgramSockT, StateT>, DgramSockT, StateT> {
-    using Base = BasicDgramSocket<DgramSocket, DgramSock, io::SocketState>;
+template<class DgramSockT=net::DgramSock>
+class DgramSocket : public BasicDgramSocket<DgramSocket<DgramSockT>, DgramSockT> {
+    using Base = BasicDgramSocket<DgramSocket<DgramSockT>, DgramSockT>;
     using typename Base::SocketRead, typename Base::SocketWrite, typename Base::SocketOpen;
   public:
     using Base::Base;

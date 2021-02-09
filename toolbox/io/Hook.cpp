@@ -15,25 +15,3 @@
 // limitations under the License.
 
 #include "Hook.hpp"
-
-#include <toolbox/sys/Log.hpp>
-
-namespace toolbox {
-inline namespace io {
-
-void dispatch(CyclTime now, const HookList& l) noexcept
-{
-    auto it = l.begin();
-    while (it != l.end()) {
-        // Increment iterator before calling each hook, so that hooks can safely unhook themselves.
-        const auto prev = it++;
-        try {
-            prev->slot(now);
-        } catch (const std::exception& e) {
-            TOOLBOX_ERROR << "error handling hook: " << e.what();
-        }
-    }
-}
-
-} // namespace io
-} // namespace toolbox

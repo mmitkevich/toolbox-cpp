@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <toolbox/sys/Log.hpp>
+
 #ifndef TOOLBOX_IO_HOOK_HPP
 #define TOOLBOX_IO_HOOK_HPP
 
@@ -38,7 +40,21 @@ struct Hook
 
 using HookList = boost::intrusive::list<Hook, boost::intrusive::constant_time_size<false>>;
 
-TOOLBOX_API void dispatch(CyclTime now, const HookList& l) noexcept;
+//TOOLBOX_API void dispatch(CyclTime now, const HookList& l) noexcept;
+
+inline void dispatch(CyclTime now, const HookList& l) noexcept
+{
+    auto it = l.begin();
+    while (it != l.end()) {
+        // Increment iterator before calling each hook, so that hooks can safely unhook themselves.
+        const auto prev = it++;
+        try {
+            prev->slot(now);
+        } catch (const std::exception& e) {
+            TOOLBOX_ERROR << "error handling hook: " << e.what();
+        }
+    }
+}
 
 } // namespace io
 } // namespace toolbox

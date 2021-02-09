@@ -171,7 +171,7 @@ bool operator!=(MmapAllocator<T> const& lhs, MmapAllocator<U> const& rhs) noexce
 namespace os {
 
 /// Map files or devices into memory.
-inline Mmap mmap(void* addr, size_t len, int prot, int flags, FD fd, off_t off,
+inline Mmap mmap(void* addr, size_t len, int prot, int flags, int fd, off_t off,
                  std::error_code& ec) noexcept
 {
     const MmapPointer p{::mmap(addr, len, prot, flags, fd, off), len};
@@ -181,7 +181,7 @@ inline Mmap mmap(void* addr, size_t len, int prot, int flags, FD fd, off_t off,
     return Mmap{p};
 }
 
-inline Mmap mmap(void* addr, size_t len, int prot, int flags, FD fd, off_t off)
+inline Mmap mmap(void* addr, size_t len, int prot, int flags, int fd, off_t off)
 {
     const MmapPointer p{::mmap(addr, len, prot, flags, fd, off), len};
     if (!p) {

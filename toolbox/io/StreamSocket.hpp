@@ -17,13 +17,13 @@
 #pragma once
 
 #include "toolbox/io/Buffer.hpp"
-#include "toolbox/io/PollHandle.hpp"
+#include "toolbox/io/Reactor.hpp"
 #include "toolbox/sys/Error.hpp"
 #include <asm-generic/errno.h>
 #include <exception>
 #include <system_error>
 #include <toolbox/io/Event.hpp>
-#include <toolbox/io/Reactor.hpp>
+#include <toolbox/io/MultiReactor.hpp>
 #include <toolbox/net/StreamSock.hpp>
 #include <toolbox/io/Socket.hpp>
 
@@ -31,9 +31,9 @@ namespace toolbox {
 inline namespace io {
 
 
-template<class Self, class SockT, typename StateT>
-class BasicStreamSocket : public BasicSocket<Self, SockT, StateT> {
-    using Base = BasicSocket<Self, SockT, StateT>;
+template<class Self, class SockT>
+class BasicStreamSocket : public BasicSocket<Self, SockT> {
+    using Base = BasicSocket<Self, SockT>;
     Self* self() { return static_cast<Self*>(this); }
 public:
     using typename Base::PollHandle;
@@ -103,7 +103,7 @@ public:
     friend Base;
     using Base::io_slot, Base::on_io_event;
     IoSlot conn_slot() { return util::bind<&Self::on_conn_event>(self()); }
-    void on_conn_event(CyclTime now, os::FD fd, PollEvents events) {
+    void on_conn_event(CyclTime now, int fd, PollEvents events) {
         if(conn_) {
             poll().mod(io_slot());   
             conn_.complete(*this, events);
@@ -114,9 +114,9 @@ protected:
     //Endpoint remote_ {};   // what we connect to
 };
 
-template<class SockClntT, typename StateT>
-class StreamSocket : public BasicStreamSocket<StreamSocket<SockClntT, StateT>, SockClntT, StateT> {
-    using Base = BasicStreamSocket<StreamSocket<SockClntT, StateT>, SockClntT, StateT>;
+template<class SockClntT>
+class StreamSocket : public BasicStreamSocket<StreamSocket<SockClntT>, SockClntT> {
+    using Base = BasicStreamSocket<StreamSocket<SockClntT>, SockClntT>;
     using typename Base::SocketConnect;
   public:
     using Base::Base;
@@ -129,10 +129,10 @@ class StreamSocket : public BasicStreamSocket<StreamSocket<SockClntT, StateT>, S
 
 
 /// adds listen and accept
-template<class Self, class SockT, class ClientSocketT, typename StateT>
-class BasicStreamServerSocket : public BasicSocket<Self, SockT, StateT>
+template<class Self, class SockT, class ClientSocketT>
+class BasicStreamServerSocket : public BasicSocket<Self, SockT>
 {
-    using Base = BasicSocket<Self, SockT, StateT>;
+    using Base = BasicSocket<Self, SockT>;
     Self* self() { return static_cast<Self*>(this); }
     using typename Base::SocketOpen;
 public:
@@ -145,8 +145,8 @@ public:
     using Base::poll, Base::state;
     using Base::read, Base::write, Base::recv;
     
-    class SockOpen: public BasicSocket<Self, SockT, StateT>::SockOpen {
-        using Base = typename BasicSocket<Self, SockT, StateT>::SockOpen;
+    class SockOpen: public BasicSocket<Self, SockT>::SockOpen {
+        using Base = typename BasicSocket<Self, SockT>::SockOpen;
       public:
         void prepare(Self& self) {
             Base::prepare(self);
@@ -200,27 +200,24 @@ public:
         self()->accept_impl().prepare(*self(), slot, &ep);
     }
 protected:
-    void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
+    void on_io_event(CyclTime now, int fd, PollEvents events) {
         if(self()->accept_impl()) {
             self()->accept_impl().complete(*self(), events);
         }
     }  
 };
 
-template<class SockServT=StreamSockServ, class SockClntT=StreamSockClnt, typename StateT=io::SocketState>
+template<class SockServT=StreamSockServ, class SockClntT=StreamSockClnt>
 class StreamServerSocket : public  BasicStreamServerSocket<
-    StreamServerSocket<SockServT, StreamSockClnt>, 
-    SockServT, StreamSocket<SockClntT, StateT>, StateT> 
+    StreamServerSocket<SockServT, SockClntT>, 
+    SockServT, StreamSocket<SockClntT>> 
 {
     using Base = BasicStreamServerSocket<
-        StreamServerSocket<SockServT, StreamSockClnt>,
-        SockServT, StreamSocket<SockClntT, StateT>, StateT>;
+        StreamServerSocket<SockServT, SockClntT>,
+        SockServT, StreamSocket<SockClntT>>;
     using typename Base::SocketAccept, typename Base::SocketOpen;
   public:
     using Base::Base;
-  protected:
-    friend Base;
-    friend typename Base::Base;
     SocketAccept& accept_impl() { return accept_impl_ ;}
     SocketOpen& open_impl() { return open_impl_; }
   protected:

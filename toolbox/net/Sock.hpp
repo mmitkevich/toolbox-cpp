@@ -754,12 +754,7 @@ struct Sock : FileHandle {
     {
     }
     Sock() noexcept = default;
-
-    template<typename ProtocolT>
-    void open(ProtocolT p) {
-
-    }
-
+    
     int family() const noexcept { return family_; }
     bool is_ip_family() const noexcept { return family_ == AF_INET || family_ == AF_INET6; }
 

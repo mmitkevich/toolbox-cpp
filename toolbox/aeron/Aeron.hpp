@@ -129,7 +129,7 @@ protected:
     aeron_context_t* context_;
 };
 
-class AeronPoll : public Aeron {
+class AeronPoll : public Aeron, virtual public IPoller {
   using Base = Aeron;
   public:
     constexpr static std::size_t FragmentCountLimit = 10;
@@ -152,7 +152,7 @@ class AeronPoll : public Aeron {
         return data_.size();
     }
 
-    bool ctl(PollHandle& handle) {
+    bool ctl(PollHandle& handle) override {
         std::size_t ix = handle.fd();
         if(ix >= data_.size()) {
             data_.resize(ix+1);
@@ -335,7 +335,7 @@ public:
     }
 
     // TODO: refactor into on_poll(PollFD& fd)
-    void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
+    void on_io_event(CyclTime now, int fd, PollEvents events) {
         if(connect_) {
             connect_.complete(*this);
             return;
@@ -583,7 +583,7 @@ public:
     }
 
     // TODO: refactor into on_poll(PollFD& fd)
-    void on_io_event(CyclTime now, os::FD fd, PollEvents events) {
+    void on_io_event(CyclTime now, int fd, PollEvents events) {
         if(bind_) {
             bind_.complete(*this);
             return;

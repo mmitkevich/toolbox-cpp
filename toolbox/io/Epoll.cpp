@@ -16,7 +16,7 @@
 
 #include "Epoll.hpp"
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/PollHandle.hpp"
+#include "toolbox/io/Reactor.hpp"
 #include "toolbox/util/Exception.hpp"
 #include "toolbox/sys/Log.hpp"
 

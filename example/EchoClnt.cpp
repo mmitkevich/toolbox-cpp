@@ -17,7 +17,7 @@
 #include "toolbox/bm/Suite.hpp"
 #include "toolbox/hdr/Histogram.hpp"
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/PollHandle.hpp"
+#include "toolbox/io/Reactor.hpp"
 #include "toolbox/sys/Log.hpp"
 #include "toolbox/sys/Time.hpp"
 #include <exception>
@@ -63,7 +63,7 @@ class EchoConn {
     }
   private:
     ~EchoConn() = default;
-    void on_input(CyclTime now, os::FD fd, PollEvents events)
+    void on_input(CyclTime now, int fd, PollEvents events)
     {
         try {
             if (events & PollEvents::Read) {

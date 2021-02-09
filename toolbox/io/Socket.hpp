@@ -1,10 +1,10 @@
 #pragma once
 
-#include "toolbox/io/PollHandle.hpp"
+#include "toolbox/io/Reactor.hpp"
 #include "toolbox/util/Slot.hpp"
 #include "toolbox/sys/Error.hpp"
 #include "toolbox/io/Buffer.hpp"
-#include "toolbox/io/Reactor.hpp"
+#include "toolbox/io/MultiReactor.hpp"
 #include "toolbox/net/Sock.hpp"
 #include "toolbox/net/DgramSock.hpp"
 #include <system_error>
@@ -106,18 +106,17 @@ protected:
 
 
 /// Self should implement read_impl/write_impl/open_impl
-template<typename Self, typename SockT, typename StateT>
-class BasicSocket : public SockT, public BasicSocketState<StateT> {
+template<typename Self, class SockT>
+class BasicSocket : public SockT, public BasicSocketState<io::SocketState> {
     using Base = SockT;
-    using SocketState = BasicSocketState<StateT>;
-    using This = BasicSocket<Self, SockT, StateT>;
+    using StateBase = BasicSocketState<io::SocketState>;
     Self* self() { return static_cast<Self*>(this); }
     const Self* self() const { return static_cast<const Self*>(this); }
 public:
     using PollHandle = toolbox::PollHandle;
     using typename Base::Protocol;
     using typename Base::Endpoint;
-    using typename SocketState::State;
+    using typename StateBase::State;
 public:
     using Base::Base, Base::get;
     using Base::read, Base::write;
@@ -259,16 +258,14 @@ public:
 
     BasicSocket()  = default;
 
-    template<typename ReactorT>
-    explicit BasicSocket(ReactorT& r)
-    : poll_(r.poll(get()))
+    explicit BasicSocket(IReactor* r)
+    : poll_(r->poller(get()))
     {
     }
 
-    template<typename ReactorT>
-    explicit BasicSocket(ReactorT& r, Protocol protocol)
+    explicit BasicSocket(IReactor* r, Protocol protocol = {})
     : Base(protocol)
-    , poll_(r.poll(get()))
+    , poll_(r->poller(get()))
     {
         self()->open_impl().prepare(*self());
         io_slot(util::bind<&Self::on_io_event>(self()));
@@ -288,10 +285,10 @@ public:
 
     PollHandle& poll() { return poll_; }
 
-    template<typename ReactorT>
-    void open(ReactorT& r, Protocol protocol = {}) {
-        *static_cast<SockT*>(this) = SockT(protocol);
-        poll_ = r.poll(get());        
+    void open(IReactor* r, Protocol protocol = {}) {
+        assert(r);
+        SockT::open(protocol);
+        poll_ = PollHandle(r->poller(get()));
         self()->open_impl().prepare(*self());
         io_slot(util::bind<&Self::on_io_event>(self()));
     }    
@@ -348,7 +345,7 @@ public:
     // for MultiSocket support
     constexpr std::size_t size() const { return 1; }
 protected:    
-    void on_io_event(CyclTime now, os::FD fd, PollEvents events) {        
+    void on_io_event(CyclTime now, int fd, PollEvents events) {        
         auto old_batching = poll().batching(true); // disable commits of poll flags while in the cycle
         for(std::size_t i=0; i<64; i++) {
             bool again = false;

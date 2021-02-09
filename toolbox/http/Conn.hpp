@@ -18,14 +18,14 @@
 #define TOOLBOX_HTTP_CONN_HPP
 
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/PollHandle.hpp"
+#include "toolbox/io/Reactor.hpp"
 #include <exception>
 #include <toolbox/http/Parser.hpp>
 #include <toolbox/http/Request.hpp>
 #include <toolbox/http/Stream.hpp>
 #include <toolbox/io/Disposer.hpp>
 #include <toolbox/io/Event.hpp>
-#include <toolbox/io/Reactor.hpp>
+#include <toolbox/io/MultiReactor.hpp>
 #include <toolbox/net/Endpoint.hpp>
 #include <toolbox/net/IoSock.hpp>
 #include <toolbox/util/MemAlloc.hpp>
@@ -67,7 +67,7 @@ class BasicHttpConn
     , reactor_(r)
     , sock_{std::move(sock)}
     , ep_{ep}
-    , sub_(sock_.get(), r.ctl(sock_.get()))
+    , sub_(sock_.get(), r.poller(sock.get()))
     {
         sub_.add(PollEvents::Read, bind<&BasicHttpConn::on_io_event>(this));
         schedule_timeout(now);
@@ -252,7 +252,7 @@ protected:
         on_http_timeout(now, ep_);
         this->dispose(now);
     }
-    void on_io_event(CyclTime now, os::FD fd, PollEvents events)
+    void on_io_event(CyclTime now, int fd, PollEvents events)
     {
         assert(fd==sock_.get());
         auto lock = this->lock_this(now);
@@ -342,7 +342,7 @@ protected:
     Reactor& reactor_;
     IoSock sock_;
     Endpoint ep_;
-    Reactor::Handle sub_;
+    PollHandle sub_;
     Timer tmr_;
     Buffer in_, out_;
     Request req_;

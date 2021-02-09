@@ -50,8 +50,6 @@ inline namespace io {
 
 class EventFd {
   public:
-    using FD = typename FileHandle::FD;
-    
     EventFd(unsigned intval, int flags)
     : fh_{os::eventfd(intval, flags)}
     {
@@ -66,7 +64,7 @@ class EventFd {
     EventFd(EventFd&&) = default;
     EventFd& operator=(EventFd&&) = default;
 
-    FD fd() const noexcept { return fh_.get(); }
+    int fd() const noexcept { return fh_.get(); }
     std::int64_t read()
     {
         union {

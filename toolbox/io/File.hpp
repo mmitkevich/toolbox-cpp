@@ -90,7 +90,7 @@ inline std::pair<FileHandle, FileHandle> pipe2(int flags)
 }
 
 /// Get file status.
-inline void fstat(FD fd, struct stat& statbuf, std::error_code& ec) noexcept
+inline void fstat(int fd, struct stat& statbuf, std::error_code& ec) noexcept
 {
     const auto ret = ::fstat(fd, &statbuf);
     if (ret < 0) {
@@ -99,7 +99,7 @@ inline void fstat(FD fd, struct stat& statbuf, std::error_code& ec) noexcept
 }
 
 /// Get file status.
-inline void fstat(FD fd, struct stat& statbuf)
+inline void fstat(int fd, struct stat& statbuf)
 {
     const auto ret = ::fstat(fd, &statbuf);
     if (ret < 0) {
@@ -108,7 +108,7 @@ inline void fstat(FD fd, struct stat& statbuf)
 }
 
 /// Truncate a file to a specified length.
-inline void ftruncate(FD fd, off_t length, std::error_code& ec) noexcept
+inline void ftruncate(int fd, off_t length, std::error_code& ec) noexcept
 {
     const auto ret = ::ftruncate(fd, length);
     if (ret < 0) {
@@ -117,7 +117,7 @@ inline void ftruncate(FD fd, off_t length, std::error_code& ec) noexcept
 }
 
 /// Truncate a file to a specified length.
-inline void ftruncate(FD fd, off_t length)
+inline void ftruncate(int fd, off_t length)
 {
     const auto ret = ::ftruncate(fd, length);
     if (ret < 0) {
@@ -126,7 +126,7 @@ inline void ftruncate(FD fd, off_t length)
 }
 
 /// Read from a file descriptor.
-inline ssize_t read(FD fd, void* buf, std::size_t len, std::error_code& ec) noexcept
+inline ssize_t read(int fd, void* buf, std::size_t len, std::error_code& ec) noexcept
 {
     const auto ret = ::read(fd, buf, len);
     if (ret < 0) {
@@ -136,7 +136,7 @@ inline ssize_t read(FD fd, void* buf, std::size_t len, std::error_code& ec) noex
 }
 
 /// Read from a file descriptor.
-inline std::size_t read(FD fd, void* buf, std::size_t len)
+inline std::size_t read(int fd, void* buf, std::size_t len)
 {
     const auto ret = ::read(fd, buf, len);
     if (ret < 0) {
@@ -146,19 +146,19 @@ inline std::size_t read(FD fd, void* buf, std::size_t len)
 }
 
 /// Read from a file descriptor.
-inline ssize_t read(FD fd, MutableBuffer buf, std::error_code& ec) noexcept
+inline ssize_t read(int fd, MutableBuffer buf, std::error_code& ec) noexcept
 {
     return read(fd, buffer_cast<void*>(buf), buffer_size(buf), ec);
 }
 
 /// Read from a file descriptor.
-inline std::size_t read(FD fd, MutableBuffer buf) noexcept
+inline std::size_t read(int fd, MutableBuffer buf) noexcept
 {
     return read(fd, buffer_cast<void*>(buf), buffer_size(buf));
 }
 
 /// Write to a file descriptor.
-inline ssize_t write(FD fd, const void* buf, std::size_t len, std::error_code& ec) noexcept
+inline ssize_t write(int fd, const void* buf, std::size_t len, std::error_code& ec) noexcept
 {
     const auto ret = ::write(fd, buf, len);
     if (ret < 0) {
@@ -168,7 +168,7 @@ inline ssize_t write(FD fd, const void* buf, std::size_t len, std::error_code& e
 }
 
 /// Write to a file descriptor.
-inline std::size_t write(FD fd, const void* buf, std::size_t len)
+inline std::size_t write(int fd, const void* buf, std::size_t len)
 {
     const auto ret = ::write(fd, buf, len);
     if (ret < 0) {
@@ -178,19 +178,19 @@ inline std::size_t write(FD fd, const void* buf, std::size_t len)
 }
 
 /// Write to a file descriptor.
-inline ssize_t write(FD fd, ConstBuffer buf, std::error_code& ec) noexcept
+inline ssize_t write(int fd, ConstBuffer buf, std::error_code& ec) noexcept
 {
     return write(fd, buffer_cast<const void*>(buf), buffer_size(buf), ec);
 }
 
 /// Write to a file descriptor.
-inline std::size_t write(FD fd, ConstBuffer buf)
+inline std::size_t write(int fd, ConstBuffer buf)
 {
     return write(fd, buffer_cast<const void*>(buf), buffer_size(buf));
 }
 
 /// File control.
-inline int fcntl(FD fd, int cmd, std::error_code& ec) noexcept
+inline int fcntl(int fd, int cmd, std::error_code& ec) noexcept
 {
     const auto ret = ::fcntl(fd, cmd);
     if (ret < 0) {
@@ -201,7 +201,7 @@ inline int fcntl(FD fd, int cmd, std::error_code& ec) noexcept
 
 /// File control.
 template <typename ArgT>
-inline int fcntl(FD fd, int cmd, ArgT arg, std::error_code& ec) noexcept
+inline int fcntl(int fd, int cmd, ArgT arg, std::error_code& ec) noexcept
 {
     const auto ret = ::fcntl(fd, cmd, arg);
     if (ret < 0) {
@@ -211,7 +211,7 @@ inline int fcntl(FD fd, int cmd, ArgT arg, std::error_code& ec) noexcept
 }
 
 /// File control.
-inline int fcntl(FD fd, int cmd)
+inline int fcntl(int fd, int cmd)
 {
     const auto ret = ::fcntl(fd, cmd);
     if (ret < 0) {
@@ -222,7 +222,7 @@ inline int fcntl(FD fd, int cmd)
 
 /// File control.
 template <typename ArgT>
-inline int fcntl(FD fd, int cmd, ArgT arg)
+inline int fcntl(int fd, int cmd, ArgT arg)
 {
     const auto ret = ::fcntl(fd, cmd, arg);
     if (ret < 0) {
@@ -235,7 +235,7 @@ inline int fcntl(FD fd, int cmd, ArgT arg)
 inline namespace io {
 
 /// Get file size.
-inline std::size_t file_size(os::FD fd)
+inline std::size_t file_size(int fd)
 {
     struct stat st;
     os::fstat(fd, st);
@@ -250,12 +250,12 @@ inline mode_t file_mode() noexcept
     return mode;
 }
 
-inline void set_non_block(os::FD fd, std::error_code& ec) noexcept
+inline void set_non_block(int fd, std::error_code& ec) noexcept
 {
     os::fcntl(fd, F_SETFL, O_NONBLOCK, ec);
 }
 
-inline void set_non_block(os::FD fd)
+inline void set_non_block(int fd)
 {
     os::fcntl(fd, F_SETFL, O_NONBLOCK);
 }

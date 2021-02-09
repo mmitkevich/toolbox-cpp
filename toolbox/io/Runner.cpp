@@ -16,7 +16,7 @@
 
 #include "Runner.hpp"
 
-#include "Reactor.hpp"
+#include "MultiReactor.hpp"
 
 #include <toolbox/sys/Log.hpp>
 

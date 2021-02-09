@@ -14,9 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "Reactor.hpp"
+#include "MultiReactor.hpp"
 #include "toolbox/io/Handle.hpp"
-#include "toolbox/io/PollHandle.hpp"
+#include "toolbox/io/Reactor.hpp"
 
 #include <toolbox/net/Endpoint.hpp>
 #include <toolbox/net/IoSock.hpp>
@@ -30,7 +30,7 @@ using namespace toolbox;
 namespace {
 
 struct TestHandler : RefCount<TestHandler, ThreadUnsafePolicy> {
-    void on_input(CyclTime now, os::FD fd, PollEvents events)
+    void on_input(CyclTime now, int fd, PollEvents events)
     {
         char buf[4];
         os::recv(fd, buf, 4, 0);
