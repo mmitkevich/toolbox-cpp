@@ -26,6 +26,8 @@
 #include <unistd.h> // getpid()
 
 #include <sys/uio.h> // writev()
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #if defined(__linux__)
 #include <sys/syscall.h>
@@ -36,7 +38,7 @@ inline namespace sys {
 using namespace std;
 namespace {
 
-const char* labels_[] = {"CRIT", "ERROR", "WARNING", "NOTICE", "INFO", "DEBUG", "DUMP"};
+const char* labels_[] = {"", "C", "E", "W", "N", "I", "D", "V7", "V8", "V9", "V10", "V11", "V12", "V13", "V14", "V15", "V16", "V17", "V18", "V19", "V20"};
 
 // Global log level and logger function.
 atomic<int> level_{
@@ -108,6 +110,9 @@ void write_log(int level, string_view msg) noexcept
 
 void null_logger(int level, string_view msg) noexcept {}
 
+int stdout_fd = STDOUT_FILENO;
+int stderr_fd = STDERR_FILENO;
+
 void std_logger(int level, string_view msg) noexcept
 {
     const auto now = WallClock::now();
@@ -125,7 +130,7 @@ void std_logger(int level, string_view msg) noexcept
     // <---------------------------------------->
     char head[42 + 1];
     size_t hlen = strftime(head, sizeof(head), "%b %d %H:%M:%S", &tm);
-    hlen += sprintf(head + hlen, ".%03d %-7s [%d]: ", static_cast<int>(ms % 1000), log_label(level),
+    hlen += sprintf(head + hlen, ".%03d %-2s [%d]: ", static_cast<int>(ms % 1000), log_label(level),
                     static_cast<int>(gettid()));
     char tail{'\n'};
     iovec iov[] = {
@@ -134,7 +139,8 @@ void std_logger(int level, string_view msg) noexcept
         {&tail, 1}                                   //
     };
 
-    int fd{level > Log::Warning ? STDOUT_FILENO : STDERR_FILENO};
+    //int fd{level > Log::Warning ? stdout_fd : stderr_fd};
+    int fd {stderr_fd};
     // The following lock was required to avoid interleaving.
     lock_guard<mutex> lock{mutex_};
     // Best effort given that this is the logger.
@@ -143,6 +149,12 @@ void std_logger(int level, string_view msg) noexcept
     writev(fd, iov, sizeof(iov) / sizeof(iov[0]));
 #pragma GCC diagnostic pop
 }
+
+void std_logger_set_file(std::string_view file) noexcept
+{
+    stdout_fd = stderr_fd = open(file.data(), O_APPEND | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+}
+
 
 void sys_logger(int level, string_view msg) noexcept
 {

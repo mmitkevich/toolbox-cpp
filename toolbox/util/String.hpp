@@ -238,6 +238,9 @@ inline bool ends_with(const std::basic_string<T, TraitsT, AllocT>& str, const st
             str.compare(str.size() - match.size(), match.size(), match) == 0;
 }
 
+std::string to_hex_dump(std::string_view buf);
+
+
 } // namespace util
 } // namespace toolbox
 

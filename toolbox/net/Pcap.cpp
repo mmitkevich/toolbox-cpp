@@ -10,10 +10,13 @@ using namespace toolbox::net;
 void PcapDevice::open()
 {
     char errbuf[PCAP_ERRBUF_SIZE];
+    strcpy(errbuf,"");
     if(use_filter()) {
         file_ = popen((filter_ + input_).c_str(), "r");
+        TOOLBOX_DEBUG<<"PcapDevice::open path:"<<filter_ + input_;
     } else {
         file_ = fopen(input_.c_str(), "rb");
+        TOOLBOX_DEBUG<<"PcapDevice::open path:"<<input_;
     }
     handle_ = pcap_fopen_offline(file_, errbuf);
     if(!handle_) {

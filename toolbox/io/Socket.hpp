@@ -7,6 +7,8 @@
 #include "toolbox/io/MultiReactor.hpp"
 #include "toolbox/net/Sock.hpp"
 #include "toolbox/net/DgramSock.hpp"
+#include "toolbox/ranges.hpp"
+#include <deque>
 #include <system_error>
 
 namespace toolbox {
@@ -30,6 +32,7 @@ public:
     
     /// fire once and reset
     void operator()(ArgsT... args) { 
+        assert(!empty());
         invoke(std::forward<ArgsT>(args)...);
     }
 
@@ -41,7 +44,6 @@ public:
     }
 
     void set_slot(Slot val) { 
-        assert(!val.empty());
         *static_cast<Slot*>(this) = val;
     }
 
@@ -288,7 +290,7 @@ public:
     void open(IReactor* r, Protocol protocol = {}) {
         assert(r);
         SockT::open(protocol);
-        poll_ = PollHandle(r->poller(get()));
+        poll_ = r->handle(get());
         self()->open_impl().prepare(*self());
         io_slot(util::bind<&Self::on_io_event>(self()));
     }    
@@ -384,6 +386,45 @@ protected:
     PollHandle poll_;    
     Endpoint local_;
     Endpoint remote_;
+};
+
+
+template<class Socket, class Buffer>
+class AsyncWrite  {
+    using Self = AsyncWrite<Socket, Buffer>;
+public:
+    bool empty() const { return done_.empty(); }
+    std::size_t pending() const { return queue_.size(); }
+    void reset() {
+        queue_.clear();
+        done_ = {};
+        size_ = 0;
+    }
+    void emplace(Socket& s, const Buffer& buf) {
+        queue_.emplace_back(&s, buf);
+    }
+
+    void operator()(SizeSlot done) {
+        assert(empty());
+        done_ = done;
+        run(0, {});
+    }
+private:    
+    void run(ssize_t size, std::error_code ec) {
+        if(queue_.empty() || ec) {
+            auto s = size_ + size;
+            size_ = 0;
+            done_(s, ec);
+        } else {
+            auto [s, buf] = queue_.front();
+            queue_.pop_front();
+            s->async_write(buf, bind<&Self::run>(this));
+        }
+    }
+private:
+    SizeSlot done_;
+    ssize_t size_ {0};
+    std::deque<std::pair<Socket*, Buffer>> queue_;
 };
 
 }}

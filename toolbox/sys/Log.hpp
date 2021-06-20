@@ -60,6 +60,8 @@ TOOLBOX_API void null_logger(int level, std::string_view msg) noexcept;
 /// stdout otherwise.
 TOOLBOX_API void std_logger(int level, std::string_view msg) noexcept;
 
+TOOLBOX_API void std_logger_set_file(std::string_view file) noexcept;
+
 /// System logger. This logger calls syslog().
 TOOLBOX_API void sys_logger(int level, std::string_view msg) noexcept;
 
@@ -89,28 +91,28 @@ class Log {
   public:
     enum : int {
         /// Critical.
-        Crit,
+        Crit = 1,
         /// Error.
-        Error,
+        Error = 2,
         /// Warning.
-        Warning,
+        Warning = 3,
         /// Notice.
-        Notice,
+        Notice = 4,
         /// Information.
-        Info,
+        Info = 5,
         /// Debug.
-        Debug,
+        Debug = 6,
         /// Dump.
-        Dump,
-        Dump1,
-        Dump2,
-        Dump3,
-        Dump4,
-        Dump5,
-        Dump6,
-        Dump7,
-        Dump8,
-        Dump9
+        Dump = 10,
+        Dump1 = 11,
+        Dump2 = 12,
+        Dump3 = 13,
+        Dump4 = 14,
+        Dump5 = 15,
+        Dump6 = 16,
+        Dump7 = 17,
+        Dump8 = 18,
+        Dump9 = 19
     };
 
     explicit Log(int level) noexcept

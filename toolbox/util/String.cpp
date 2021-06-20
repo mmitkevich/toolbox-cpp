@@ -74,5 +74,24 @@ pair<string, string> split_pair(const string& s, char delim)
     return {key, val};
 }
 
+std::string to_hex_dump(std::string_view buf) {
+    std::stringstream ss;
+    static char hex[]="0123456789ABCDEF";
+    const char* b = (const char*)buf.data();
+    for(std::size_t i=0; i<buf.size(); i++) {
+        char c = buf[i];
+        ss << hex[(c>>4)&0xF] << hex[c&0x0F] << ' ';
+    }
+    ss << std::endl;
+    for(std::size_t i=0; i<buf.size(); i++) {
+        char c = buf[i];
+        if(c<' ')
+            c=' ';
+        ss << ' ' << c << ' ';
+    }
+    return ss.str();
+}
+
+
 } // namespace util
 } // namespace toolbox

@@ -95,7 +95,7 @@ template<class TestFn, class TypeC>
 constexpr bool is_valid(TestFn cond, TypeC obj) {
     return std::is_invocable<TestFn, typename std::decay_t<TypeC>::type>::value;
 };
-#define TB_IS_VALID(obj, expr) tb::is_valid([](auto&& obj)->decltype(expr){return {};}, tb::type_c<decltype(obj)>{})
+#define TB_IS_VALID(obj, expr) tb::is_valid([&](auto&& obj)->decltype(expr){return {};}, tb::type_c<decltype(obj)>{})
 
 
 } // namespace util

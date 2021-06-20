@@ -294,7 +294,7 @@ class TOOLBOX_API Epoll : virtual public IPoller {
             try {
                 assert(s!=nullptr);
                 auto evs = from_epoll_events(events);
-                //TOOLBOX_DUMP<<"epoll_ready fd="<<fd<<" events="<<evs;
+                TOOLBOX_DUMPV(5)<<"epoll_ready fd="<<fd<<" events="<<evs;
                 s(now, fd, evs);
             } catch (const std::exception& e) {
                 TOOLBOX_ERROR << "error handling io event: " << e.what();
@@ -316,7 +316,7 @@ private:
     {
         Event ev;
         mod(ev, fd, sid, events);
-        TOOLBOX_DUMP<<"epoll_ctl_add fd="<<fd<<" ev="<<std::hex<<(unsigned)ev.events<<std::dec;
+        TOOLBOX_DUMPV(9)<<"epoll_ctl_add fd="<<fd<<" ev="<<std::hex<<(unsigned)ev.events<<std::dec;
         os::epoll_ctl(*epfd_, EPOLL_CTL_ADD, fd, ev);
     }
     void del(int fd)
@@ -324,7 +324,7 @@ private:
         // In kernel versions before 2.6.9, the EPOLL_CTL_DEL operation required a non-null pointer
         // in event, even though this argument is ignored.
         Event ev{};
-        TOOLBOX_DUMP<<"epoll_ctl_del fd="<<fd<<" ev="<<std::hex<<(unsigned)ev.events<<std::dec;
+        TOOLBOX_DUMPV(9)<<"epoll_ctl_del fd="<<fd<<" ev="<<std::hex<<(unsigned)ev.events<<std::dec;
         os::epoll_ctl(*epfd_, EPOLL_CTL_DEL, fd, ev);
     }
     /// throws system_error

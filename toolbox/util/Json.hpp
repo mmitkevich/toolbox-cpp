@@ -380,7 +380,8 @@ public:
     MutableElement(std::string val) : MutableElement(std::string_view(val)) {}
 
     // array
-    MutableElement(std::initializer_list<MutableElement> lst) {
+    template<class T>
+    MutableElement(std::initializer_list<T> lst) {
         element_type_ = element_type::ARRAY;
         iterator it(&back());
 
@@ -388,7 +389,15 @@ public:
             it = insert_after(it, e);
         }
     }
-    
+    template<class T>
+    MutableElement(std::vector<T> lst) {
+        element_type_ = element_type::ARRAY;
+        iterator it(&back());
+
+        for(auto& e : lst) {
+            it = insert_after(it, e);
+        }
+    }
     MutableElement(std::initializer_list<std::pair<Key, MutableElement>> lst) {
         element_type_ = element_type::OBJECT;
         iterator it(&back());
@@ -534,12 +543,13 @@ public:
 
     template<typename ElementT>
     static inline auto to_object(const ElementT &e) {
-    if constexpr(std::is_same_v<ElementT, simdjson::dom::element>) {
-        return simdjson::dom::object(e);
-    } else {
-        return e;
+        if constexpr(std::is_same_v<ElementT, simdjson::dom::element>) {
+            return simdjson::dom::object(e);
+        } else {
+            return e;
+        }
     }
-}
+    MutableDocument* document() { return document_;}
 private:
     MutableElement& operator=(const MutableElement& rhs) {
         element_type_ = rhs.element_type_;
@@ -738,6 +748,7 @@ inline MutableElement& MutableElement::at(std::string_view key)
     } else {
         value_.child_ = e;
     }
+    assert(e->document_);
     return *e;
 }
 inline MutableElement& MutableElement::at(std::size_t index)

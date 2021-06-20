@@ -1,11 +1,12 @@
 #pragma once
 
 #include "toolbox/io/Socket.hpp"
+#include "toolbox/util/String.hpp"
 #include <functional>
 
 namespace toolbox { inline namespace io {
-
 template<typename Self, typename SockT>
+
 class BasicDgramSocket : public BasicSocket< Self, SockT>
 {
     using This = BasicDgramSocket<Self, SockT>;
@@ -33,6 +34,8 @@ public:
             std::error_code ec{};
             assert(Base::endpoint_);
             ssize_t size = self.recvfrom(Base::buf_, Base::flags_, *Base::endpoint_, ec);
+            TOOLBOX_DUMPV(6)<<"dgram recvfrom(flags="<<Base::flags_<<",size="<<size<<",remote="<<*Base::endpoint_<<",ec:"<<ec<<")";
+            TOOLBOX_DUMPV(7)<<"dgram recvfrom:\n"<<util::to_hex_dump(std::string_view{(char*)Base::buf_.data(),(std::size_t)size});            
             if(size<0 && ec.value()==EWOULDBLOCK) {
                 self.poll().add(PollEvents::Read);
                 return false; // no more
@@ -61,6 +64,8 @@ public:
             assert(Base::endpoint_);
             auto& ep = *Base::endpoint_;
             assert(!(ep==Endpoint{}));
+
+            //TOOLBOX_DUMPV(5) << "dgram sendto "<<ep<<" size="<<Base::data_.size()<<tb::to_hex_dump(std::string_view{(const char*)Base::data_.data(), Base::data_.size()});
             if(!Base::data_.data()) {
                 auto wbuf = Base::buf_.prepare(Base::data_.size());
                 Base::mut_(wbuf.data(),wbuf.size());
@@ -68,6 +73,8 @@ public:
             }else {
                 size = self.sendto(Base::data_, Base::flags_, ep, ec);
             }
+            TOOLBOX_DUMPV(6)<<"dgram sendto(flags="<<Base::flags_<<",size="<<size<<",remote="<<*Base::endpoint_<<",ec:"<<ec<<")";
+            TOOLBOX_DUMPV(7)<<"dgram sendto:\n"<<util::to_hex_dump(std::string_view{(char*)Base::data_.data(),(std::size_t)size});            
             if(size<0 && ec.value()==EWOULDBLOCK) {
                 self.poll().add(PollEvents::Write);
                 return false; // no more

@@ -68,6 +68,7 @@ class BasicSlot {
 
     /// Unsafe invoke
     TOOLBOX_ALWAYS_INLINE void invoke(ArgsT... args) const {
+        assert(fn_);
         fn_(obj_, std::forward<ArgsT>(args)...); 
     }
     /// Safe call
