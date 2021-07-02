@@ -46,7 +46,7 @@ public:
     class SocketConnect : public CompletionSlot<std::error_code> {
         using Base = CompletionSlot<std::error_code>;
     public:
-        using Base::Base, Base::empty, Base::invoke, Base::operator bool, Base::set_slot, Base::reset;
+        using Base::Base, Base::empty, Base::invoke,  Base::set_slot, Base::reset;
         using typename Base::Slot;
 
         bool prepare(Self& self, const Endpoint& ep, Slot slot) {

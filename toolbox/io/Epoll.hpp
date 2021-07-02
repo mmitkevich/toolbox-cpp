@@ -293,7 +293,7 @@ class TOOLBOX_API Epoll : virtual public IPoller {
 
             try {
                 assert(s!=nullptr);
-                auto evs = from_epoll_events(events);
+                PollEvents evs = from_epoll_events(events);
                 TOOLBOX_DUMPV(5)<<"epoll_ready fd="<<fd<<" events="<<evs;
                 s(now, fd, evs);
             } catch (const std::exception& e) {

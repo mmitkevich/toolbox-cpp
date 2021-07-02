@@ -28,18 +28,22 @@ public:
         using Base::empty, Base::notify;
         using typename Base::Slot;
         bool prepare(Self& self, Slot slot, MutableBuffer buf) {
+            Endpoint ep {};
+            get_sock_name(self.get(), ep);
+            TOOLBOX_DUMPV(7) << "prepare dgram recvfrom(local="<<ep<<", size="<<buf.size()<<")";
             return Base::prepare(self, slot, buf);
         }
         bool complete(Self& self, PollEvents events) {
             std::error_code ec{};
             assert(Base::endpoint_);
             ssize_t size = self.recvfrom(Base::buf_, Base::flags_, *Base::endpoint_, ec);
-            TOOLBOX_DUMPV(6)<<"dgram recvfrom(flags="<<Base::flags_<<",size="<<size<<",remote="<<*Base::endpoint_<<",ec:"<<ec<<")";
-            TOOLBOX_DUMPV(7)<<"dgram recvfrom:\n"<<util::to_hex_dump(std::string_view{(char*)Base::buf_.data(),(std::size_t)size});            
             if(size<0 && ec.value()==EWOULDBLOCK) {
                 self.poll().add(PollEvents::Read);
                 return false; // no more
             } else {
+                if(!ec && size>=0) {
+                    TOOLBOX_DUMPV(7)<<"dgram recvfrom:\n"<<util::to_hex_dump(std::string_view{(char*)Base::buf_.data(),(std::size_t)size});            
+                }
                 notify(size, ec);   // this will launch handlers they could make not-empty again
                 if(empty()) {
                     self.poll().del(PollEvents::Read); // no write interest 
@@ -55,6 +59,9 @@ public:
         using typename Base::Slot;
         
         bool prepare(Self& self, Slot slot, ConstBuffer buf) {
+            assert(slot);
+            TOOLBOX_DUMPV(6) << "prepare dgram sendto(fd="<<self.get()<<", ep="<<*Base::endpoint_<<", size="<<buf.size()<<")";
+            TOOLBOX_DUMPV(7) << "prepare dgram sendto(fd="<<self.get()<<", ep="<<*Base::endpoint_<<", size="<<buf.size()<<")\n"<<to_hex_dump(std::string_view{(const char*)buf.data(), buf.size()});            
             return Base::prepare(self, slot, buf);
         }
 
@@ -65,7 +72,8 @@ public:
             auto& ep = *Base::endpoint_;
             assert(!(ep==Endpoint{}));
 
-            //TOOLBOX_DUMPV(5) << "dgram sendto "<<ep<<" size="<<Base::data_.size()<<tb::to_hex_dump(std::string_view{(const char*)Base::data_.data(), Base::data_.size()});
+            TOOLBOX_DUMPV(6) << "dgram sendto(fd="<<self.get()<<", ep="<<ep<<", size="<<Base::data_.size()<<")";
+            TOOLBOX_DUMPV(7) << "dgram sendto:\n"<<to_hex_dump(std::string_view{(const char*)Base::data_.data(), Base::data_.size()});
             if(!Base::data_.data()) {
                 auto wbuf = Base::buf_.prepare(Base::data_.size());
                 Base::mut_(wbuf.data(),wbuf.size());
@@ -73,7 +81,7 @@ public:
             }else {
                 size = self.sendto(Base::data_, Base::flags_, ep, ec);
             }
-            TOOLBOX_DUMPV(6)<<"dgram sendto(flags="<<Base::flags_<<",size="<<size<<",remote="<<*Base::endpoint_<<",ec:"<<ec<<")";
+            TOOLBOX_DUMPV(6)<<"dgram sendto(fd="<<self.get()<<", flags="<<Base::flags_<<",size="<<size<<",remote="<<*Base::endpoint_<<",ec:"<<ec<<")";
             TOOLBOX_DUMPV(7)<<"dgram sendto:\n"<<util::to_hex_dump(std::string_view{(char*)Base::data_.data(),(std::size_t)size});            
             if(size<0 && ec.value()==EWOULDBLOCK) {
                 self.poll().add(PollEvents::Write);
@@ -96,7 +104,7 @@ public:
         self()->read_impl().prepare(*self(), slot, buffer);
     }
     void async_sendto(ConstBuffer buffer, const Endpoint& endpoint, Slot<ssize_t, std::error_code> slot) {
-        assert(!self()->write_impl());
+        assert(self()->can_write());
         self()->write_impl().endpoint(&endpoint);
         self()->write_impl().prepare(*self(), slot, buffer);
     }
@@ -113,12 +121,14 @@ public:
 template<class DgramSockT=net::DgramSock>
 class DgramSocket : public BasicDgramSocket<DgramSocket<DgramSockT>, DgramSockT> {
     using Base = BasicDgramSocket<DgramSocket<DgramSockT>, DgramSockT>;
-    using typename Base::SocketRead, typename Base::SocketWrite, typename Base::SocketOpen;
+    using typename Base::SocketRead, typename Base::SocketOpen;
+    using SocketWrite = SocketWriteQueue<typename Base::SocketWrite>;
   public:
     using Base::Base;
     SocketOpen& open_impl() { return open_impl_; }
     SocketRead& read_impl() { return read_impl_; }
     SocketWrite& write_impl() { return write_impl_; }
+    bool can_write()  { return true; }
   protected:
     SocketOpen open_impl_;
     SocketRead read_impl_;

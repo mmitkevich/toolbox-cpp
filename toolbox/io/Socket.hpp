@@ -29,14 +29,17 @@ public:
     using Slot = util::Slot<ArgsT...>;
 
     using Slot::empty, Slot::operator bool, Slot::reset;
-    
+    using Slot::Slot;
+
     /// fire once and reset
+    TOOLBOX_ALWAYS_INLINE
     void operator()(ArgsT... args) { 
         assert(!empty());
         invoke(std::forward<ArgsT>(args)...);
     }
 
     /// fire once and reset
+    TOOLBOX_ALWAYS_INLINE
     void invoke(ArgsT...args) {
         auto s = *this;
         reset();
@@ -44,6 +47,7 @@ public:
     }
 
     void set_slot(Slot val) { 
+        assert(val);    // no empty slot
         *static_cast<Slot*>(this) = val;
     }
 
@@ -54,9 +58,11 @@ template<typename...ArgsT>
 class PendingSlot : public CompletionSlot<ArgsT...> {
     using Base = CompletionSlot<ArgsT...>;
 public:
+    using Base::Base;
     void pending(int val) { pending_ = val; }
     int pending() const { return pending_; }
     void inc_pending() { pending_++; }
+    TOOLBOX_ALWAYS_INLINE
     void operator()(ArgsT...args) {
         if(--pending_==0)
             Base::operator()(std::forward<ArgsT>(args)...);
@@ -149,6 +155,9 @@ public:
             self.poll().commit();
             return false;   // async
         }
+        void set_buf(MutableBuffer buf) {
+            buf_ = buf;
+        }
         void notify(ssize_t size, std::error_code ec) { 
             auto s = get_slot();
             reset();
@@ -202,6 +211,11 @@ public:
             self.poll().add(PollEvents::Write);
             return false; // async
         }
+
+        void set_buf(ConstBuffer data) {
+            data_ = data;
+        }
+        ConstBuffer buf() const { return data_; }
         // zero copy
         bool prepare(Self& self, Slot slot, std::size_t size, util::Slot<void*, std::size_t> mut) {
             if(*this) {
@@ -384,47 +398,68 @@ protected:
     //SockOpen<DerivedT> open_;
     Buffer buf_;
     PollHandle poll_;    
-    Endpoint local_;
-    Endpoint remote_;
+    //Endpoint local_;
+    //Endpoint remote_;
 };
 
 
-template<class Socket, class Buffer>
-class AsyncWrite  {
-    using Self = AsyncWrite<Socket, Buffer>;
+template<class Op>
+class SocketWriteQueue {
+    using Slot = typename Op::Slot;
 public:
-    bool empty() const { return done_.empty(); }
+    bool empty() const { return queue_.empty(); }
+    operator bool() const { return !empty(); }
+
     std::size_t pending() const { return queue_.size(); }
+    
     void reset() {
         queue_.clear();
-        done_ = {};
-        size_ = 0;
-    }
-    void emplace(Socket& s, const Buffer& buf) {
-        queue_.emplace_back(&s, buf);
     }
 
-    void operator()(SizeSlot done) {
-        assert(empty());
-        done_ = done;
-        run(0, {});
+    template<class Endpoint>
+    void endpoint(Endpoint ep) {
+        next_.endpoint(std::forward<Endpoint>(ep));
     }
-private:    
-    void run(ssize_t size, std::error_code ec) {
-        if(queue_.empty() || ec) {
-            auto s = size_ + size;
-            size_ = 0;
-            done_(s, ec);
-        } else {
-            auto [s, buf] = queue_.front();
-            queue_.pop_front();
-            s->async_write(buf, bind<&Self::run>(this));
+
+    template<class Flags>
+    void flags(Flags flags) {
+        next_.flags(std::forward<Flags>(flags));
+    }
+
+    template<class Self>
+    bool prepare(Self& self, Slot slot, ConstBuffer buf) {
+        if(next_.prepare(self, slot, buf)) {
+            // we've written our buf syncronously
+            return true;
         }
+        // no space need copy
+        auto buf2 = wbuf_.prepare(buf.size());
+        std::memcpy(buf2.data(), buf.data(), buf.size());
+        wbuf_.commit(buf.size());
+        next_.set_buf(buf2);
+        queue_.emplace_back(std::move(next_));
+        next_.reset();
+        return false;
+    }
+
+    template<class Self>
+    bool complete(Self& self, PollEvents events) {
+        assert(!empty());
+        while(!queue_.empty()) {
+            auto& op = queue_.front();
+            if(!op.complete(self, events)) {
+                return false;
+            }
+            // release the buf2
+            wbuf_.consume(op.buf().size());
+            queue_.pop_front();
+        }
+        return true;
     }
 private:
-    SizeSlot done_;
-    ssize_t size_ {0};
-    std::deque<std::pair<Socket*, Buffer>> queue_;
+    std::deque<Op> queue_;
+    Buffer wbuf_;
+    Op next_;
 };
 
 }}
