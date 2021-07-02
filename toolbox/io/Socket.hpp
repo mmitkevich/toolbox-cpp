@@ -8,6 +8,7 @@
 #include "toolbox/net/Sock.hpp"
 #include "toolbox/net/DgramSock.hpp"
 #include "toolbox/ranges.hpp"
+#include "toolbox/util/String.hpp"
 #include <deque>
 #include <system_error>
 
@@ -201,6 +202,7 @@ public:
 
         void flags(int val) { flags_ = val; }
         void endpoint(const Endpoint* ep) { endpoint_ = ep; }
+        const Endpoint& endpoint() const { return *endpoint_; }
 
         bool prepare(Self& self, Slot slot, ConstBuffer data) {
             if(*this) {
@@ -433,12 +435,15 @@ public:
             return true;
         }
         // no space need copy
-        auto buf2 = wbuf_.prepare(buf.size());
-        std::memcpy(buf2.data(), buf.data(), buf.size());
-        wbuf_.commit(buf.size());
-        next_.set_buf(buf2);
+        std::size_t sz = buf.size();
+        auto buf2 = MutableBuffer {wbuf_.prepare(sz).data(), sz };
+        std::memcpy(buf2.data(), buf.data(), sz);
+        wbuf_.commit(sz);
+        next_.set_buf(buf2); // change the buf. but next wbuf_.prepare could invalidate it
+        TOOLBOX_DUMPV(7) << "prepare dgram sendto(fd="<<self.get()<<", ep="<<next_.endpoint()<<", size="<<buf2.size()<<")\n"<<to_hex_dump(std::string_view{(const char*)buf2.data(), buf2.size()});            
         queue_.emplace_back(std::move(next_));
         next_.reset();
+        TOOLBOX_DUMPV(5)<<"wqueue commit: "<< queue_.size()<<", size:"<<sz;
         return false;
     }
 
@@ -447,11 +452,16 @@ public:
         assert(!empty());
         while(!queue_.empty()) {
             auto& op = queue_.front();
+            auto sz = op.buf().size();
+            op.set_buf(ConstBuffer{wbuf_.data(), sz}); // since wbuf_ could be reallocated
+            assert(sz>0);
             if(!op.complete(self, events)) {
                 return false;
             }
+            TOOLBOX_DUMPV(5)<<"wqueue release: "<< queue_.size()<<", size:"<<sz;            
             // release the buf2
-            wbuf_.consume(op.buf().size());
+            wbuf_.commit(sz);
+            wbuf_.consume(sz);
             queue_.pop_front();
         }
         return true;
