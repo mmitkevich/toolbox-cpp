@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstring>
 #include <string_view>
 #include <string>
 #include <toolbox/util/RobinHood.hpp>
@@ -7,26 +8,32 @@
 namespace toolbox{ inline namespace util {
 class InternedStrings {
 public:
+    ~InternedStrings() { clear(); }
+
     std::string_view intern(std::string_view str) {
         //std::cout << strings_<<"|"<<str<<std::endl;
         auto hash = std::hash<std::string_view>{}(str);
-        auto it = index_.find(hash);
-        if (it==index_.end()) {
-            auto len = buffer_.size();
-            buffer_ += str;
-            buffer_ += '\0';
-            auto result = std::string_view{buffer_.data()+len, str.size()};
-            index_[hash] = result;
-            return result;
+        auto it = values_.find(str);
+        if(it!=values_.end()) {
+            return it->first;
         } else {
-            return it->second;
+            char* data = new char[str.size()+1];
+            std::memcpy(data, str.data(), str.size());
+            data[str.size()] = '\0';
+            auto [it, is_new] = values_.emplace(data, Empty{});
+            return it->first;
         }
     }
-    void reserve(std::size_t capacity) { buffer_.reserve(capacity); }
-    void clear() { buffer_.clear(); }
+    
+    void clear() { 
+        for(auto [k,v] : values_) {
+            delete k.data();
+        }
+        values_.clear(); 
+    }
 private:
-    std::string buffer_;
-    util::RobinFlatMap<std::size_t, std::string_view> index_;
+    struct Empty{};
+    util::RobinFlatMap<std::string_view, Empty> values_;
 };
 
 } // ns util

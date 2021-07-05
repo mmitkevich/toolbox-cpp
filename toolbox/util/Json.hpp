@@ -633,10 +633,9 @@ inline std::string get_file_contents(const char *filename)
 /// Usecase: create MutableDocument, fill with some config, pass to somecode as const, drop alltogether.
 class MutableDocument: public MutableElement {
 public:
-    MutableDocument(element_type element_type=element_type::NULL_VALUE, std::size_t elements_capacity=256, std::size_t strings_capacity=4096)
+    MutableDocument(element_type element_type=element_type::NULL_VALUE, std::size_t elements_capacity=256)
     : MutableElement(this, element_type) {
         elements_.reserve(elements_capacity);
-        strings_.reserve(strings_capacity);
     }
     MutableElement* alloc_element(MutableElement::element_type type) {
         assert(this);
