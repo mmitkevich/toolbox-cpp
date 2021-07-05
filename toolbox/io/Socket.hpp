@@ -439,7 +439,7 @@ public:
         auto buf2 = MutableBuffer {wbuf_.prepare(sz).data(), sz };
         std::memcpy(buf2.data(), buf.data(), sz);
         wbuf_.commit(sz);
-        next_.set_buf(buf2); // change the buf. but next wbuf_.prepare could invalidate it
+        next_.set_buf(MutableBuffer{nullptr,sz}); // change the buf. only size() is used since data is in the wbuf_
         TOOLBOX_DUMPV(7) << "prepare dgram sendto(fd="<<self.get()<<", ep="<<next_.endpoint()<<", size="<<buf2.size()<<")\n"<<to_hex_dump(std::string_view{(const char*)buf2.data(), buf2.size()});            
         queue_.emplace_back(std::move(next_));
         next_.reset();
@@ -459,8 +459,7 @@ public:
                 return false;
             }
             TOOLBOX_DUMPV(5)<<"wqueue release: "<< queue_.size()<<", size:"<<sz;            
-            // release the buf2
-            wbuf_.commit(sz);
+            // consume from wbuf
             wbuf_.consume(sz);
             queue_.pop_front();
         }
